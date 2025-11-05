@@ -25,7 +25,7 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 
 1. Clone this repository:
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/zahlabut/RunTempestMonitorPods.git
 cd HorizonBaseYesy
 ```
 
