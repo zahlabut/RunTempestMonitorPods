@@ -4,11 +4,13 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 
 ## Features
 
-- 🚀 **Parallel Test Execution**: Run multiple Tempest test CRs in parallel
+- 🚀 **Parallel CR Management**: Apply and monitor multiple Tempest test CRs simultaneously
+  - **Note**: Test-operator by default runs one test pod at a time. The tool can manage multiple CRs in parallel, but actual test execution is sequential per test-operator's design.
 - 🔄 **Continuous Loop Testing**: Run tests continuously for a specified duration
 - 📊 **Pod Monitoring**: Monitor pod status, CPU, and memory usage in real-time
 - 📈 **Data Visualization**: Generate interactive graphs and static plots
 - 💾 **CSV Export**: Export all metrics and results to CSV files
+- 🔍 **Failed Test Tracking**: Automatically extract and track failed tests from pod logs
 - ✅ **Test Verification**: Automatically verify test results (PASS/FAIL)
 - 🛡️ **Failure Handling**: Log failures without interrupting the test process
 - ⏰ **Configurable Duration**: Set test run duration in hours
@@ -97,8 +99,8 @@ logging:
 ## Custom Resource Files
 
 Create your CR files for the Tempest tests you want to run. Example CR files are provided:
-- `designate_tempest_plugin_cr.yaml` - Designate zones and recordsets tests
-- `designate_neutron_integration_cr.yaml` - Designate blacklists and pool tests
+- `designate_tempest_plugin_cr.yaml` - All Designate tempest plugin tests
+- `designate_neutron_integration_cr.yaml` - Neutron-Designate integration tests from neutron tempest plugin
 
 ### Example CR Structure
 
@@ -168,6 +170,7 @@ After running, the `results/` directory will contain:
 results/
 ├── tempest_monitoring_metrics_20250105_143022.csv
 ├── tempest_monitoring_results_20250105_143022.csv
+├── tempest_monitoring_failed_tests_20250105_143022.csv
 ├── pod_metrics_20250105_153045.html
 ├── pod_metrics_20250105_153045.png
 ├── test_results_20250105_153045.html
@@ -204,6 +207,27 @@ Contains test results:
 | `tests_failed` | Number of tests failed |
 | `tests_skipped` | Number of tests skipped |
 | `message` | Status message or error |
+
+#### Failed Tests CSV (`*_failed_tests_*.csv`)
+
+Contains detailed information about failed tests extracted from pod logs:
+
+| Column | Description |
+|--------|-------------|
+| `timestamp` | When the failed test was detected |
+| `cr_name` | Name of the Custom Resource |
+| `pod_name` | Name of the test pod |
+| `test_number` | Test sequence number |
+| `test_name` | Full test name (class.method) |
+| `duration` | Test execution time |
+
+**Example:**
+```csv
+timestamp,cr_name,pod_name,test_number,test_name,duration
+2025-11-06T13:16:34.123456,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,222.489823s
+```
+
+This CSV helps identify patterns in test failures across multiple iterations.
 
 ### Graphs
 
@@ -353,6 +377,7 @@ monitoring:
     - "designate-*"
     - "neutron-*"
     - "nova-*"
+    - "tempest-*"  # Include test pods
 ```
 
 ### Long-Running Tests
@@ -370,6 +395,23 @@ For more granular metrics:
 monitoring:
   interval_seconds: 10  # Collect every 10 seconds
 ```
+
+### Parallel Test Execution Limitations
+
+**Important**: While this tool can manage multiple CRs simultaneously, the OpenStack test-operator has a limitation:
+
+- **Test-operator default behavior**: Runs only one test pod at a time
+- **Tool behavior**: Can apply and monitor multiple CRs in parallel, but test execution will be sequential
+- **Workaround**: Configure multiple CR files; the tool will automatically manage them in sequence and restart them in iterations
+
+**How it works**:
+1. Tool applies all CRs from `cr_files` list
+2. Test-operator queues them and runs one at a time
+3. Tool monitors all CRs and detects completion (even if pod is in Error state)
+4. After completion, tool cleans up and starts the next iteration
+5. Process repeats for the configured duration
+
+This design ensures continuous testing without manual intervention, even with test-operator's sequential execution model.
 
 ## Contributing
 
