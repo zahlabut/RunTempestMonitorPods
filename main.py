@@ -124,6 +124,14 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
     else:
         logger.info(f"[Iteration {iteration}] CR {cr_name} completed successfully")
     
+    # Clean up CR after completion (needed for next iteration)
+    # Test-operator leaves pods in ERROR status when complete
+    logger.info(f"[Iteration {iteration}] Cleaning up CR: {cr_name}")
+    if cr_handler.delete_cr(cr_name):
+        logger.info(f"[Iteration {iteration}] Successfully deleted CR: {cr_name}")
+    else:
+        logger.warning(f"[Iteration {iteration}] Failed to delete CR: {cr_name}, may need manual cleanup")
+    
     return results
 
 
