@@ -43,6 +43,7 @@ class CSVExporter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.metrics_csv = os.path.join(results_dir, f"{csv_filename}_metrics_{timestamp}.csv")
         self.results_csv = os.path.join(results_dir, f"{csv_filename}_results_{timestamp}.csv")
+        self.failed_tests_csv = os.path.join(results_dir, f"{csv_filename}_failed_tests_{timestamp}.csv")
         
     def export_metrics(self, metrics: List[Dict]) -> str:
         """
@@ -114,6 +115,42 @@ class CSVExporter:
             
         except Exception as e:
             logger.error(f"Failed to export test results to CSV: {e}")
+            return ""
+    
+    def export_failed_tests(self, failed_tests: List[Dict]) -> str:
+        """
+        Export failed test details to CSV.
+        
+        Args:
+            failed_tests: List of failed test dictionaries
+            
+        Returns:
+            Path to the created CSV file
+        """
+        if not failed_tests:
+            logger.debug("No failed tests to export")
+            return ""
+        
+        try:
+            # Define CSV headers
+            headers = ["timestamp", "cr_name", "pod_name", "test_number", "test_name", "duration"]
+            
+            file_exists = os.path.exists(self.failed_tests_csv)
+            
+            with open(self.failed_tests_csv, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=headers)
+                
+                if not file_exists:
+                    writer.writeheader()
+                
+                for failed_test in failed_tests:
+                    writer.writerow({k: failed_test.get(k, "") for k in headers})
+            
+            logger.info(f"Exported {len(failed_tests)} failed test entries to {self.failed_tests_csv}")
+            return self.failed_tests_csv
+            
+        except Exception as e:
+            logger.error(f"Failed to export failed tests to CSV: {e}")
             return ""
     
     def generate_graphs(self) -> List[str]:

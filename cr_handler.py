@@ -6,6 +6,7 @@ Custom Resource handler for managing OpenStack Tempest test CRs.
 """
 
 import logging
+import re
 import subprocess
 import json
 import time
@@ -309,6 +310,70 @@ class CRHandler:
         except Exception as e:
             logger.debug(f"Error checking logs for {pod_name}: {e}")
             return False
+    
+    def extract_failed_tests(self, cr_name: str) -> list:
+        """
+        Extract failed test details from pod logs.
+        
+        Args:
+            cr_name: Name of the CR
+            
+        Returns:
+            List of dictionaries containing failed test information
+        """
+        failed_tests = []
+        
+        try:
+            # Find pods for this CR
+            cmd = ["oc", "get", "pods", "-n", self.namespace, "-o", "json"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            pods_data = json.loads(result.stdout)
+            
+            for pod in pods_data.get("items", []):
+                pod_name = pod["metadata"]["name"]
+                
+                if cr_name in pod_name:
+                    # Get full pod logs
+                    log_cmd = ["oc", "logs", pod_name, "-n", self.namespace]
+                    log_result = subprocess.run(log_cmd, capture_output=True, text=True, timeout=60)
+                    
+                    if log_result.returncode == 0:
+                        logs = log_result.stdout
+                        
+                        # Parse for FAILED tests
+                        # Format: {3} test.class.name [time] ... FAILED
+                        failed_pattern = r'\{(\d+)\}\s+([^\[]+)\s+\[([^\]]+)\]\s+\.\.\.\s+FAILED'
+                        
+                        for line in logs.split('\n'):
+                            match = re.search(failed_pattern, line)
+                            if match:
+                                test_number = match.group(1)
+                                test_name = match.group(2).strip()
+                                duration = match.group(3).strip()
+                                
+                                failed_test = {
+                                    'cr_name': cr_name,
+                                    'pod_name': pod_name,
+                                    'test_number': test_number,
+                                    'test_name': test_name,
+                                    'duration': duration,
+                                    'timestamp': datetime.now().isoformat()
+                                }
+                                
+                                failed_tests.append(failed_test)
+                                logger.info(f"Found failed test: {test_name} (duration: {duration})")
+                    
+                    # Only check the first matching pod
+                    break
+            
+            return failed_tests
+            
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Timeout getting logs for CR {cr_name}")
+            return []
+        except Exception as e:
+            logger.error(f"Error extracting failed tests for {cr_name}: {e}")
+            return []
     
     def wait_for_completion(self, cr_name: str, poll_interval: int = 30, 
                            shutdown_flag: Optional[threading.Event] = None) -> Tuple[bool, str]:

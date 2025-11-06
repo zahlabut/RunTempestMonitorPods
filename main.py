@@ -174,6 +174,13 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
     else:
         logger.info(f"[Iteration {iteration}] CR {cr_name} completed successfully")
     
+    # Extract failed tests from pod logs before cleanup
+    logger.info(f"[Iteration {iteration}] Extracting failed tests for CR: {cr_name}")
+    failed_tests = cr_handler.extract_failed_tests(cr_name)
+    
+    # Store failed tests in results for export
+    results["failed_tests"] = failed_tests
+    
     # Clean up CR after completion (needed for next iteration)
     # Test-operator leaves pods in ERROR status when complete
     logger.info(f"[Iteration {iteration}] Cleaning up CR: {cr_name}")
@@ -268,6 +275,10 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
                     
                     # Export result immediately
                     csv_exporter.export_test_results([result])
+                    
+                    # Export failed tests if any
+                    if "failed_tests" in result and result["failed_tests"]:
+                        csv_exporter.export_failed_tests(result["failed_tests"])
                     
                     # Log result
                     status = "PASSED" if result["passed"] else "FAILED"
@@ -424,6 +435,8 @@ def main():
         
         logger.info(f"\nMetrics CSV: {csv_exporter.metrics_csv}")
         logger.info(f"Results CSV: {csv_exporter.results_csv}")
+        if os.path.exists(csv_exporter.failed_tests_csv):
+            logger.info(f"Failed Tests CSV: {csv_exporter.failed_tests_csv}")
         
         # Print download commands for result files (example commands)
         current_host = socket.gethostname()
@@ -437,6 +450,8 @@ def main():
             csv_files.append(csv_exporter.metrics_csv)
         if os.path.exists(csv_exporter.results_csv):
             csv_files.append(csv_exporter.results_csv)
+        if os.path.exists(csv_exporter.failed_tests_csv):
+            csv_files.append(csv_exporter.failed_tests_csv)
         
         # Collect HTML files from graph_files list
         for graph_file in graph_files:
