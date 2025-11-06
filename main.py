@@ -444,22 +444,41 @@ def main():
         
         # Print download command for the zip archive
         if archive_file and os.path.exists(archive_file):
-            logger.info("\n" + "="*60)
-            logger.info("DOWNLOAD COMMAND FOR RESULTS ARCHIVE")
-            logger.info("="*60)
-            logger.info("All results are packaged in a single ZIP file.")
-            logger.info("Copy and paste this command on your local desktop:")
-            logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
+            # ANSI color codes
+            GREEN = "\033[1;32m"
+            CYAN = "\033[1;36m"
+            YELLOW = "\033[1;33m"
+            BLUE = "\033[1;34m"
+            RESET = "\033[0m"
+            
+            print(f"\n{CYAN}{'='*60}{RESET}")
+            print(f"{GREEN}DOWNLOAD COMMAND FOR RESULTS ARCHIVE{RESET}")
+            print(f"{CYAN}{'='*60}{RESET}")
+            print(f"{YELLOW}All results are packaged in a single ZIP file.{RESET}")
+            print(f"Copy and paste this command on your local desktop:")
+            print(f"(Replace <your_bastion_host> with your actual bastion hostname)\n")
             
             filename = os.path.basename(archive_file)
             full_path = os.path.abspath(archive_file)
             
-            logger.info("# Download all results (ZIP archive):")
-            download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
-            logger.info(f"{download_cmd}\n")
+            print(f"{BLUE}# Download all results (ZIP archive) - Option 1 (Recommended):{RESET}")
+            # Use scp through bastion with ProxyJump
+            download_cmd1 = f'scp -o ProxyJump=root@<your_bastion_host> zuul@controller-0:{full_path} ./{filename}'
+            print(f"{GREEN}{download_cmd1}{RESET}\n")
             
-            logger.info(f"Archive contains all CSV files, HTML graphs, and PNG images.")
-            logger.info(f"Archive location: {full_path}")
+            print(f"{BLUE}# Alternative - Option 2 (if scp doesn't work):{RESET}")
+            # Create wrapper script approach
+            print(f"{GREEN}# Step 1: Copy file from controller to bastion{RESET}")
+            copy_cmd = f'ssh root@<your_bastion_host> "su - zuul -c \'scp controller-0:{full_path} /tmp/{filename}\'"'
+            print(f"{copy_cmd}")
+            print(f"\n{GREEN}# Step 2: Download from bastion to local{RESET}")
+            local_cmd = f'scp root@<your_bastion_host>:/tmp/{filename} ./'
+            print(f"{local_cmd}\n")
+            
+            print(f"Archive contains: CSV files, HTML graphs, and PNG images")
+            print(f"Archive size: {os.path.getsize(archive_file) / 1024 / 1024:.2f} MB")
+            print(f"Archive location: {full_path}")
+            print(f"{CYAN}{'='*60}{RESET}")
         
         logger.info("="*60)
         logger.info("OpenStack Tempest Test Runner Completed")
