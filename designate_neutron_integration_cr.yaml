@@ -5,7 +5,7 @@ metadata:
   namespace: openstack
 spec:
   #containerImage: images.paas.redhat.com/podified-rhos18-rhel9/openstack-tempest-all:e306c000e14953ee40577a3ec3758f23
-  containerImage: images.paas.redhat.com/podified-rhos18-rhel9/openstack-tempest-all:3197eaafa1b5916f3b3bcd653bb4f25c
+  #containerImage: images.paas.redhat.com/podified-rhos18-rhel9/openstack-tempest-all:3197eaafa1b5916f3b3bcd653bb4f25c
   networkAttachments:
   - ctlplane
   openStackConfigMap: openstack-config
