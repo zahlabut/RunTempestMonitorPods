@@ -461,19 +461,16 @@ def main():
             filename = os.path.basename(archive_file)
             full_path = os.path.abspath(archive_file)
             
-            print(f"{BLUE}# Download all results (ZIP archive) - Option 1 (Recommended):{RESET}")
-            # Use scp through bastion with ProxyJump
-            download_cmd1 = f'scp -o ProxyJump=root@<your_bastion_host> zuul@controller-0:{full_path} ./{filename}'
-            print(f"{GREEN}{download_cmd1}{RESET}\n")
-            
-            print(f"{BLUE}# Alternative - Option 2 (if scp doesn't work):{RESET}")
-            # Create wrapper script approach
+            print(f"{BLUE}# Download all results (ZIP archive) - Recommended Method:{RESET}")
             print(f"{GREEN}# Step 1: Copy file from controller to bastion{RESET}")
             copy_cmd = f'ssh root@<your_bastion_host> "su - zuul -c \'scp controller-0:{full_path} /tmp/{filename}\'"'
             print(f"{copy_cmd}")
             print(f"\n{GREEN}# Step 2: Download from bastion to local{RESET}")
             local_cmd = f'scp root@<your_bastion_host>:/tmp/{filename} ./'
-            print(f"{local_cmd}\n")
+            print(f"{local_cmd}")
+            print(f"\n{GREEN}# Optional: Clean up temp file on bastion{RESET}")
+            cleanup_cmd = f'ssh root@<your_bastion_host> "rm /tmp/{filename}"'
+            print(f"{cleanup_cmd}\n")
             
             print(f"Archive contains: CSV files, HTML graphs, and PNG images")
             print(f"Archive size: {os.path.getsize(archive_file) / 1024 / 1024:.2f} MB")
