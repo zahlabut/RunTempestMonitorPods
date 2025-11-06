@@ -80,6 +80,83 @@ class CRHandler:
             logger.error(error_msg)
             return False, None, error_msg
     
+    def wait_for_pod_to_start(self, cr_name: str, timeout: int = 180, 
+                              shutdown_flag: Optional[threading.Event] = None) -> Tuple[bool, str]:
+        """
+        Wait for a pod associated with the CR to start running.
+        
+        Args:
+            cr_name: Name of the CR
+            timeout: Timeout in seconds to wait for pod to start (default: 180s = 3min)
+            shutdown_flag: Optional shutdown event to allow graceful interruption
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        start_time = time.time()
+        poll_interval = 5  # Check every 5 seconds
+        
+        logger.info(f"Waiting for pod to start for CR: {cr_name} (timeout: {timeout}s)")
+        
+        while time.time() - start_time < timeout:
+            # Check for shutdown request
+            if shutdown_flag and shutdown_flag.is_set():
+                msg = f"Pod startup check interrupted by shutdown"
+                logger.info(msg)
+                return False, msg
+            
+            try:
+                # Get pods matching the CR name pattern
+                cmd = ["oc", "get", "pods", "-n", self.namespace, "-o", "json"]
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                pods_data = json.loads(result.stdout)
+                
+                # Look for pods that match the CR name
+                for pod in pods_data.get("items", []):
+                    pod_name = pod["metadata"]["name"]
+                    
+                    if cr_name in pod_name:
+                        phase = pod.get("status", {}).get("phase", "Unknown")
+                        
+                        # Check if pod is Running or Succeeded
+                        if phase in ["Running", "Succeeded"]:
+                            msg = f"Pod {pod_name} is {phase}"
+                            logger.info(msg)
+                            return True, msg
+                        
+                        # Check if pod is Failed
+                        elif phase == "Failed":
+                            container_statuses = pod.get("status", {}).get("containerStatuses", [])
+                            reason = "Unknown"
+                            if container_statuses:
+                                reason = container_statuses[0].get("state", {}).get("terminated", {}).get("reason", "Unknown")
+                            
+                            msg = f"Pod {pod_name} failed to start (Phase: {phase}, Reason: {reason})"
+                            logger.error(msg)
+                            return False, msg
+                        
+                        # Pod exists but not running yet
+                        logger.debug(f"Pod {pod_name} is in phase: {phase}")
+                
+            except subprocess.CalledProcessError as e:
+                logger.debug(f"Failed to get pods: {e.stderr}")
+            except json.JSONDecodeError as e:
+                logger.debug(f"Failed to parse pods JSON: {e}")
+            
+            # Wait before next check
+            if shutdown_flag:
+                if shutdown_flag.wait(timeout=poll_interval):
+                    msg = f"Pod startup check interrupted by shutdown"
+                    logger.info(msg)
+                    return False, msg
+            else:
+                time.sleep(poll_interval)
+        
+        # Timeout reached
+        msg = f"Timeout waiting for pod to start for CR: {cr_name} (waited {timeout}s)"
+        logger.error(msg)
+        return False, msg
+    
     def get_cr_status(self, cr_name: str, kind: str = None) -> Dict:
         """
         Get the status of a Custom Resource.

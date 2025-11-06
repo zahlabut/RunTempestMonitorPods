@@ -207,20 +207,70 @@ Contains test results:
 
 ### Graphs
 
+The tool generates interactive HTML graphs and static images for visualization.
+
 #### Pod Metrics Graph
 
 Interactive HTML graph showing:
-- CPU usage over time (per pod)
-- Memory usage over time (per pod)
-- Container restarts over time (per pod)
+- **CPU usage over time** (per pod) - Track resource consumption
+- **Memory usage over time** (per pod) - Monitor memory footprint
+- **Container restarts over time** (per pod) - Detect stability issues
+
+**Example**: `pod_metrics_20251106_114457.html`
+
+The graph displays multiple pods on a single interactive chart with:
+- Individual lines for each pod being monitored
+- Hover tooltips showing exact values at any point in time
+- Zoom and pan capabilities for detailed analysis
+- Legend to show/hide specific pods
+- Time-series data captured at configured intervals
+
+![Pod Metrics Example](docs/pod_metrics_example.png)
+
+**What to look for in the graph:**
+- 📈 **Steady CPU/Memory**: Normal test execution
+- 🔴 **Spikes in CPU/Memory**: Heavy operations or potential issues
+- ⚠️ **Increasing restarts**: Pod stability problems
+- 📊 **Patterns over iterations**: Performance consistency
 
 #### Test Results Graph
 
 Interactive HTML graph showing:
-- Pass/Fail status timeline
-- Test counts (passed, failed, skipped)
+- **Pass/Fail status timeline** - Visual test success tracking
+- **Test counts** (passed, failed, skipped) - Detailed breakdown per iteration
+
+**Example**: `test_results_20251106_114457.html`
+
+The graph visualizes:
+- Bar charts for pass/fail/skip counts per iteration
+- Color-coded status indicators (green=pass, red=fail, yellow=skip)
+- Success rate trends over multiple iterations
+- Iteration timing and duration
+
+**What to look for in the graph:**
+- ✅ **Consistent passes**: Stable test suite
+- ❌ **Failed tests**: Investigation needed
+- 📉 **Degrading success rate**: Potential environment issues
 
 All graphs are also exported as static images (PNG/SVG/PDF).
+
+### Downloading Result Files
+
+After the test run completes, download commands are displayed:
+
+```bash
+============================================================
+DOWNLOAD COMMANDS FOR RESULT FILES
+============================================================
+Copy and paste these commands on your local desktop:
+(Replace <your_bastion_host> with your actual bastion hostname)
+
+ssh -t root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 "cat /path/to/tempest_monitoring_metrics_20251106_120613.csv"'" > tempest_monitoring_metrics_20251106_120613.csv
+
+ssh -t root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 "cat /path/to/pod_metrics_20251106_114457.html"'" > pod_metrics_20251106_114457.html
+```
+
+Simply copy and execute these commands on your local machine to download all result files including interactive HTML graphs.
 
 ## Architecture
 

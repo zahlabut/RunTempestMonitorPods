@@ -80,6 +80,15 @@ def signal_handler(signum, frame):
     shutdown_flag.set()
 
 
+def print_error_bold_red(message: str):
+    """Print error message in bold red text."""
+    # ANSI color codes: \033[1;31m = bold red, \033[0m = reset
+    RED_BOLD = "\033[1;31m"
+    RESET = "\033[0m"
+    print(f"{RED_BOLD}{message}{RESET}")
+    logging.error(message)
+
+
 def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) -> Dict:
     """
     Run a single CR and monitor until completion.
@@ -112,6 +121,45 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
         }
     
     logger.info(f"[Iteration {iteration}] Started CR: {cr_name} from {cr_file}")
+    
+    # Wait for pod to actually start (fail fast if pod doesn't start)
+    pod_started, pod_message = cr_handler.wait_for_pod_to_start(
+        cr_name, 
+        timeout=180,  # 3 minutes to start
+        shutdown_flag=shutdown_flag
+    )
+    
+    if not pod_started:
+        error_msg = f"ERROR: Test pod failed to start for CR {cr_name}!"
+        detail_msg = f"Details: {pod_message}"
+        explanation = "This indicates a problem with the test setup or environment."
+        action = "Stopping tool execution immediately."
+        
+        print_error_bold_red("\n" + "="*60)
+        print_error_bold_red(error_msg)
+        print_error_bold_red(detail_msg)
+        print_error_bold_red(explanation)
+        print_error_bold_red(action)
+        print_error_bold_red("="*60 + "\n")
+        
+        # Clean up the failed CR
+        logger.info(f"Cleaning up failed CR: {cr_name}")
+        cr_handler.delete_cr(cr_name)
+        
+        # Signal shutdown to stop the tool
+        shutdown_flag.set()
+        
+        return {
+            "cr_name": cr_file,
+            "passed": False,
+            "phase": "PodStartupFailed",
+            "tests_passed": 0,
+            "tests_failed": 0,
+            "tests_skipped": 0,
+            "message": f"Pod failed to start: {pod_message}",
+            "timestamp": datetime.now().isoformat(),
+            "iteration": iteration
+        }
     
     # Wait for completion (non-blocking, returns after timeout or completion)
     # Pass shutdown_flag to allow graceful interruption
@@ -351,9 +399,15 @@ def main():
         graph_files = []
         if config['output']['enable_graphs']:
             logger.info("Generating graphs...")
-            graph_files = csv_exporter.generate_graphs()
-            for graph_file in graph_files:
-                logger.info(f"Generated graph: {graph_file}")
+            try:
+                graph_files = csv_exporter.generate_graphs()
+                if graph_files:
+                    for graph_file in graph_files:
+                        logger.info(f"Generated graph: {graph_file}")
+                else:
+                    logger.warning("No graphs were generated (possibly not enough data)")
+            except Exception as e:
+                logger.error(f"Failed to generate graphs: {e}")
         
         # Print summary
         logger.info("\n" + "="*60)
@@ -371,22 +425,30 @@ def main():
         logger.info(f"\nMetrics CSV: {csv_exporter.metrics_csv}")
         logger.info(f"Results CSV: {csv_exporter.results_csv}")
         
-        # Print download commands for HTML graphs
-        if graph_files:
-            current_host = socket.gethostname()
-            current_dir = os.getcwd()
-            
+        # Print download commands for all result files (CSV and HTML)
+        current_host = socket.gethostname()
+        current_dir = os.getcwd()
+        
+        # Collect all files to download
+        files_to_download = []
+        if os.path.exists(csv_exporter.metrics_csv):
+            files_to_download.append(csv_exporter.metrics_csv)
+        if os.path.exists(csv_exporter.results_csv):
+            files_to_download.append(csv_exporter.results_csv)
+        files_to_download.extend(graph_files)
+        
+        if files_to_download:
             logger.info("\n" + "="*60)
-            logger.info("DOWNLOAD COMMANDS FOR HTML RESULTS")
+            logger.info("DOWNLOAD COMMANDS FOR RESULT FILES")
             logger.info("="*60)
             logger.info("Copy and paste these commands on your local desktop:")
             logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
             
-            for graph_file in graph_files:
-                filename = os.path.basename(graph_file)
-                full_path = os.path.abspath(graph_file)
+            for file_path in files_to_download:
+                filename = os.path.basename(file_path)
+                full_path = os.path.abspath(file_path)
                 
-                # Command to download HTML files via SSH
+                # Command to download files via SSH
                 download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
                 logger.info(f"{download_cmd}\n")
         
