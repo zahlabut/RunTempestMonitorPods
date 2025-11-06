@@ -425,32 +425,54 @@ def main():
         logger.info(f"\nMetrics CSV: {csv_exporter.metrics_csv}")
         logger.info(f"Results CSV: {csv_exporter.results_csv}")
         
-        # Print download commands for all result files (CSV and HTML)
+        # Print download commands for result files (example commands)
         current_host = socket.gethostname()
         current_dir = os.getcwd()
         
-        # Collect all files to download
-        files_to_download = []
-        if os.path.exists(csv_exporter.metrics_csv):
-            files_to_download.append(csv_exporter.metrics_csv)
-        if os.path.exists(csv_exporter.results_csv):
-            files_to_download.append(csv_exporter.results_csv)
-        files_to_download.extend(graph_files)
+        # Collect available files
+        csv_files = []
+        html_files = []
         
-        if files_to_download:
+        if os.path.exists(csv_exporter.metrics_csv):
+            csv_files.append(csv_exporter.metrics_csv)
+        if os.path.exists(csv_exporter.results_csv):
+            csv_files.append(csv_exporter.results_csv)
+        
+        for graph_file in graph_files:
+            if graph_file.endswith('.html'):
+                html_files.append(graph_file)
+        
+        if csv_files or html_files:
             logger.info("\n" + "="*60)
             logger.info("DOWNLOAD COMMANDS FOR RESULT FILES")
             logger.info("="*60)
             logger.info("Copy and paste these commands on your local desktop:")
             logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
             
-            for file_path in files_to_download:
-                filename = os.path.basename(file_path)
-                full_path = os.path.abspath(file_path)
-                
-                # Command to download files via SSH
+            # Show one CSV example
+            if csv_files:
+                csv_file = csv_files[0]  # Use first CSV as example
+                filename = os.path.basename(csv_file)
+                full_path = os.path.abspath(csv_file)
+                logger.info("# Download CSV file:")
                 download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
                 logger.info(f"{download_cmd}\n")
+            
+            # Show HTML graph example
+            if html_files:
+                html_file = html_files[0]  # Use first HTML as example
+                filename = os.path.basename(html_file)
+                full_path = os.path.abspath(html_file)
+                logger.info("# Download HTML graph:")
+                download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
+                logger.info(f"{download_cmd}\n")
+            
+            # List all available files
+            logger.info("All result files:")
+            for csv_file in csv_files:
+                logger.info(f"  - {os.path.abspath(csv_file)}")
+            for html_file in html_files:
+                logger.info(f"  - {os.path.abspath(html_file)}")
         
         logger.info("="*60)
         logger.info("OpenStack Tempest Test Runner Completed")

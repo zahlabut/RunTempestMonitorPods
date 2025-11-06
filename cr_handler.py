@@ -225,13 +225,13 @@ class CRHandler:
     
     def _check_pod_completion(self, cr_name: str) -> bool:
         """
-        Check if pods associated with the CR are in terminal state (Error, Completed).
+        Check if pods associated with the CR are in terminal state and have completed tests.
         
         Args:
             cr_name: Name of the CR
             
         Returns:
-            True if pod is in terminal state (Error/Completed), False otherwise
+            True if pod is in terminal state with completed tests, False otherwise
         """
         try:
             cmd = ["oc", "get", "pods", "-n", self.namespace, "-o", "json"]
@@ -248,13 +248,66 @@ class CRHandler:
                     
                     # Terminal states: Error, Failed, Succeeded
                     if phase in ["Error", "Failed", "Succeeded"]:
-                        logger.info(f"Pod {pod_name} is in terminal state: {phase} - marking CR as completed")
-                        return True
+                        # For Error/Failed pods, check logs to see if tests actually completed
+                        if phase in ["Error", "Failed"]:
+                            if self._check_test_completion_in_logs(pod_name):
+                                logger.info(f"Pod {pod_name} is in {phase} state but tests completed - marking CR as completed")
+                                return True
+                            else:
+                                logger.debug(f"Pod {pod_name} is in {phase} state but no test completion found in logs")
+                                return False
+                        else:
+                            # Succeeded - definitely completed
+                            logger.info(f"Pod {pod_name} is in terminal state: {phase} - marking CR as completed")
+                            return True
             
             return False
             
         except Exception as e:
             logger.debug(f"Failed to check pod completion for {cr_name}: {e}")
+            return False
+    
+    def _check_test_completion_in_logs(self, pod_name: str) -> bool:
+        """
+        Check pod logs for test completion indicators (Totals, Ran: X tests).
+        
+        Args:
+            pod_name: Name of the pod to check
+            
+        Returns:
+            True if test completion found in logs, False otherwise
+        """
+        try:
+            # Get pod logs
+            cmd = ["oc", "logs", pod_name, "-n", self.namespace, "--tail=100"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logs = result.stdout
+                
+                # Check for test completion indicators
+                # Look for "Totals" and "Ran: X tests" which indicate test run completed
+                if "Totals" in logs and "Ran:" in logs and "tests" in logs:
+                    logger.info(f"Found test completion in logs for pod {pod_name}")
+                    
+                    # Extract test summary for logging
+                    for line in logs.split('\n'):
+                        if "Ran:" in line or "Passed:" in line or "Failed:" in line:
+                            logger.info(f"  {line.strip()}")
+                    
+                    return True
+                else:
+                    logger.debug(f"No test completion indicators found in logs for {pod_name}")
+                    return False
+            else:
+                logger.debug(f"Failed to get logs for {pod_name}: {result.stderr}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Timeout getting logs for {pod_name}")
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking logs for {pod_name}: {e}")
             return False
     
     def wait_for_completion(self, cr_name: str, poll_interval: int = 30, 
