@@ -74,4 +74,3 @@ spec:
       - http://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/python-pyroute2/0.7.3/2.el9ost/noarch/python3-pyroute2-0.7.3-2.el9ost.noarch.rpm
       - http://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/scapy/2.5.0/1.el9/noarch/python3-scapy-2.5.0-1.el9.noarch.rpm
       - http://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/python-whitebox-neutron-tests-tempest/0.9.2/18.0.20250604211120.e67f790.el9osttrunk/noarch/python3-whitebox-neutron-tests-tempest-0.9.2-18.0.20250604211120.e67f790.el9osttrunk.noarch.rpm
-      -
