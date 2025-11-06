@@ -216,14 +216,14 @@ Interactive HTML graph showing:
 - **Memory usage over time** (per pod) - Monitor memory footprint
 - **Container restarts over time** (per pod) - Detect stability issues
 
-**Example**: [📊 View Interactive Graph](docs/pod_metrics_20251106_114457.html)
-
 The graph displays multiple pods on a single interactive chart with:
 - Individual lines for each pod being monitored
 - Hover tooltips showing exact values at any point in time
 - Zoom and pan capabilities for detailed analysis
 - Legend to show/hide specific pods
 - Time-series data captured at configured intervals
+
+**Example Graph:**
 
 ![Pod Metrics Example](docs/pod_metrics_example.png)
 
