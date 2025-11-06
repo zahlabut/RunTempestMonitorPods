@@ -11,14 +11,16 @@ in parallel and monitors pod metrics (CPU, RAM, status) throughout the test runs
 
 import argparse
 import logging
+import os
+import signal
+import socket
 import sys
+import threading
 import time
 import yaml
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Tuple
-import signal
-import threading
 
 from pod_monitor import PodMonitor
 from cr_handler import CRHandler
@@ -207,10 +209,11 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
             
             # Collect results as they complete
             for future in as_completed(futures):
-                if shutdown_flag.is_set():
-                    break
-                    
                 cr_file = futures[future]
+                
+                # If shutdown requested, still collect the result but mark we should stop
+                should_continue = not shutdown_flag.is_set()
+                
                 try:
                     result = future.result()
                     all_results.append(result)
@@ -235,6 +238,11 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
                         "timestamp": datetime.now().isoformat(),
                         "iteration": iteration
                     })
+                
+                # Break after processing if shutdown was requested
+                if not should_continue:
+                    logger.info("Shutdown requested, waiting for remaining tasks to complete...")
+                    break
         
         iteration += 1
         
@@ -332,6 +340,13 @@ def main():
         shutdown_flag.set()
         monitor_thread.join(timeout=10)
         
+        # Clean up any remaining active CRs (using oc delete -f which cleans up pods too)
+        if cr_handler.active_crs:
+            logger.info("\nCleaning up active CRs...")
+            for cr_name in list(cr_handler.active_crs.keys()):
+                logger.info(f"Deleting active CR: {cr_name}")
+                cr_handler.delete_cr(cr_name)
+        
         # Generate graphs
         graph_files = []
         if config['output']['enable_graphs']:
@@ -358,8 +373,6 @@ def main():
         
         # Print download commands for HTML graphs
         if graph_files:
-            import os
-            import socket
             current_host = socket.gethostname()
             current_dir = os.getcwd()
             

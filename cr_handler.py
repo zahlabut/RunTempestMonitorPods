@@ -219,7 +219,7 @@ class CRHandler:
     
     def delete_cr(self, cr_name: str) -> bool:
         """
-        Delete a Custom Resource.
+        Delete a Custom Resource using its original file.
         
         Args:
             cr_name: Name of the CR
@@ -228,33 +228,38 @@ class CRHandler:
             True if successful, False otherwise
         """
         try:
-            # Try to get the kind from active_crs
-            kind = None
+            # Get the CR file from active tracking
             if cr_name in self.active_crs:
-                kind = self.active_crs[cr_name]["kind"]
+                cr_file = self.active_crs[cr_name]["file"]
+                
+                # Delete using the original file (proper way - cleans up all resources)
+                cmd = ["oc", "delete", "-f", cr_file, "-n", self.namespace, "--ignore-not-found"]
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                logger.info(f"Deleted CR {cr_name} using file {cr_file}: {result.stdout.strip()}")
+                
+                # Remove from active tracking
+                del self.active_crs[cr_name]
+                return True
+            else:
+                # Fallback: try to delete by resource type if we don't have the file
+                logger.warning(f"CR {cr_name} not in active tracking, trying fallback deletion")
+                resource_types = ["tempest", "tempestrun", "test"]
+                
+                for res_type in resource_types:
+                    try:
+                        cmd = ["oc", "delete", res_type, cr_name, "-n", self.namespace, "--ignore-not-found"]
+                        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                        logger.info(f"Deleted CR {cr_name}: {result.stdout.strip()}")
+                        return True
+                    except subprocess.CalledProcessError:
+                        continue
+                
+                logger.warning(f"Could not delete CR {cr_name}")
+                return False
             
-            resource_types = [kind] if kind else ["tempest", "tempestrun", "test"]
-            
-            for res_type in resource_types:
-                if not res_type:
-                    continue
-                    
-                try:
-                    cmd = ["oc", "delete", res_type, cr_name, "-n", self.namespace]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                    logger.info(f"Deleted CR {cr_name}: {result.stdout.strip()}")
-                    
-                    # Remove from active tracking
-                    if cr_name in self.active_crs:
-                        del self.active_crs[cr_name]
-                    
-                    return True
-                except subprocess.CalledProcessError:
-                    continue
-            
-            logger.warning(f"Could not delete CR {cr_name}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to delete CR {cr_name}: {e.stderr}")
             return False
-            
         except Exception as e:
             logger.error(f"Failed to delete CR {cr_name}: {e}")
             return False
