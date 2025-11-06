@@ -112,7 +112,8 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
     logger.info(f"[Iteration {iteration}] Started CR: {cr_name} from {cr_file}")
     
     # Wait for completion (non-blocking, returns after timeout or completion)
-    success, message = cr_handler.wait_for_completion(cr_name, poll_interval=30)
+    # Pass shutdown_flag to allow graceful interruption
+    success, message = cr_handler.wait_for_completion(cr_name, poll_interval=30, shutdown_flag=shutdown_flag)
     
     # Check results
     results = cr_handler.check_test_results(cr_name)

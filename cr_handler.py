@@ -11,6 +11,7 @@ import json
 import time
 from datetime import datetime
 from typing import Dict, Optional, Tuple
+import threading
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -138,13 +139,15 @@ class CRHandler:
                 "raw_status": {}
             }
     
-    def wait_for_completion(self, cr_name: str, poll_interval: int = 30) -> Tuple[bool, str]:
+    def wait_for_completion(self, cr_name: str, poll_interval: int = 30, 
+                           shutdown_flag: Optional[threading.Event] = None) -> Tuple[bool, str]:
         """
         Wait for a CR to complete.
         
         Args:
             cr_name: Name of the CR
             poll_interval: Polling interval in seconds
+            shutdown_flag: Optional shutdown event to allow graceful interruption
             
         Returns:
             Tuple of (success, message)
@@ -152,6 +155,12 @@ class CRHandler:
         start_time = time.time()
         
         while time.time() - start_time < self.timeout:
+            # Check for shutdown request
+            if shutdown_flag and shutdown_flag.is_set():
+                msg = f"CR {cr_name} monitoring interrupted by shutdown"
+                logger.info(msg)
+                return False, msg
+            
             status = self.get_cr_status(cr_name)
             
             if status["completed"]:
@@ -165,7 +174,16 @@ class CRHandler:
                     return False, msg
             
             logger.debug(f"CR {cr_name} still running (phase: {status['phase']})")
-            time.sleep(poll_interval)
+            
+            # Use shutdown_flag.wait() if available to allow interruption
+            if shutdown_flag:
+                if shutdown_flag.wait(timeout=poll_interval):
+                    # Shutdown was signaled during wait
+                    msg = f"CR {cr_name} monitoring interrupted by shutdown"
+                    logger.info(msg)
+                    return False, msg
+            else:
+                time.sleep(poll_interval)
         
         msg = f"CR {cr_name} timed out after {self.timeout} seconds"
         logger.error(msg)

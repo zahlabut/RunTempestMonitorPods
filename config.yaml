@@ -19,6 +19,7 @@ monitoring:
   # Pod name patterns to monitor (supports wildcards)
   pod_patterns:
     - "designate-*"
+    - "tempest-*"
   
   # Monitoring interval in seconds
   interval_seconds: 30
