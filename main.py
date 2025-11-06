@@ -463,7 +463,8 @@ def main():
             
             print(f"{BLUE}# Download all results (ZIP archive):{RESET}")
             # Use base64 to safely transfer binary file through SSH (prevents corruption)
-            download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \\\"base64 {full_path}\\\"\'" | base64 -d > {filename}'
+            # Note: No -t flag - it corrupts base64 data stream
+            download_cmd = f'ssh root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \\\"base64 {full_path}\\\"\'" | base64 -d > {filename}'
             print(f"{GREEN}{download_cmd}{RESET}")
             print(f"{YELLOW}Note: Using base64 encoding to safely transfer binary ZIP file{RESET}\n")
             
