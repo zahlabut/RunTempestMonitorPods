@@ -26,7 +26,7 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 1. Clone this repository:
 ```bash
 git clone https://github.com/zahlabut/RunTempestMonitorPods.git
-cd HorizonBaseYesy
+cd RunTempestMonitorPods
 ```
 
 2. Install dependencies:
@@ -36,8 +36,8 @@ pip install -r requirements.txt
 
 3. Configure your OpenShift CLI:
 ```bash
-oc login <your-cluster-url>
-oc project <your-namespace>
+oc login -u system:admin
+oc project openstack
 ```
 
 ## Configuration
@@ -47,8 +47,8 @@ Edit `config.yaml` to customize the test runner:
 ```yaml
 # List of CR files to run
 cr_files:
-  - "cr_designate_test1.yaml"
-  - "cr_designate_test2.yaml"
+  - "designate_neutron_integration_cr.yaml"
+  - "designate_tempest_plugin_cr.yaml"
 
 # Duration to run tests (in hours)
 time_to_run_hours: 2
