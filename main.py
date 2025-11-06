@@ -438,9 +438,18 @@ def main():
         if os.path.exists(csv_exporter.results_csv):
             csv_files.append(csv_exporter.results_csv)
         
+        # Collect HTML files from graph_files list
         for graph_file in graph_files:
-            if graph_file.endswith('.html'):
+            if graph_file and graph_file.endswith('.html'):
                 html_files.append(graph_file)
+        
+        # Also check for any existing HTML files in results directory
+        if os.path.exists(config['output']['results_dir']):
+            for filename in os.listdir(config['output']['results_dir']):
+                if filename.endswith('.html'):
+                    html_path = os.path.join(config['output']['results_dir'], filename)
+                    if html_path not in html_files:  # Avoid duplicates
+                        html_files.append(html_path)
         
         if csv_files or html_files:
             logger.info("\n" + "="*60)
