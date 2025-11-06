@@ -449,23 +449,24 @@ def main():
             logger.info("Copy and paste these commands on your local desktop:")
             logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
             
-            # Show one CSV example
+            # Show CSV download command (one example)
             if csv_files:
                 csv_file = csv_files[0]  # Use first CSV as example
                 filename = os.path.basename(csv_file)
                 full_path = os.path.abspath(csv_file)
-                logger.info("# Download CSV file:")
+                logger.info("# Download CSV files (example):")
                 download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
                 logger.info(f"{download_cmd}\n")
             
-            # Show HTML graph example
+            # Show HTML graph download commands (all HTML files)
             if html_files:
-                html_file = html_files[0]  # Use first HTML as example
-                filename = os.path.basename(html_file)
-                full_path = os.path.abspath(html_file)
-                logger.info("# Download HTML graph:")
-                download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
-                logger.info(f"{download_cmd}\n")
+                logger.info("# Download HTML graphs:")
+                for html_file in html_files:
+                    filename = os.path.basename(html_file)
+                    full_path = os.path.abspath(html_file)
+                    download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
+                    logger.info(f"{download_cmd}")
+                logger.info("")
             
             # List all available files
             logger.info("All result files:")
