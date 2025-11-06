@@ -420,6 +420,10 @@ def main():
             except Exception as e:
                 logger.error(f"Failed to generate graphs: {e}")
         
+        # Create zip archive of all results
+        logger.info("Creating results archive...")
+        archive_file = csv_exporter.create_results_archive()
+        
         # Print summary
         logger.info("\n" + "="*60)
         logger.info("TEST RUN SUMMARY")
@@ -438,66 +442,24 @@ def main():
         if os.path.exists(csv_exporter.failed_tests_csv):
             logger.info(f"Failed Tests CSV: {csv_exporter.failed_tests_csv}")
         
-        # Print download commands for result files (example commands)
-        current_host = socket.gethostname()
-        current_dir = os.getcwd()
-        
-        # Collect available files
-        csv_files = []
-        html_files = []
-        
-        if os.path.exists(csv_exporter.metrics_csv):
-            csv_files.append(csv_exporter.metrics_csv)
-        if os.path.exists(csv_exporter.results_csv):
-            csv_files.append(csv_exporter.results_csv)
-        if os.path.exists(csv_exporter.failed_tests_csv):
-            csv_files.append(csv_exporter.failed_tests_csv)
-        
-        # Collect HTML files from graph_files list
-        for graph_file in graph_files:
-            if graph_file and graph_file.endswith('.html'):
-                html_files.append(graph_file)
-        
-        # Also check for any existing HTML files in results directory
-        if os.path.exists(config['output']['results_dir']):
-            for filename in os.listdir(config['output']['results_dir']):
-                if filename.endswith('.html'):
-                    html_path = os.path.join(config['output']['results_dir'], filename)
-                    if html_path not in html_files:  # Avoid duplicates
-                        html_files.append(html_path)
-        
-        if csv_files or html_files:
+        # Print download command for the zip archive
+        if archive_file and os.path.exists(archive_file):
             logger.info("\n" + "="*60)
-            logger.info("DOWNLOAD COMMANDS FOR RESULT FILES")
+            logger.info("DOWNLOAD COMMAND FOR RESULTS ARCHIVE")
             logger.info("="*60)
-            logger.info("Copy and paste these commands on your local desktop:")
+            logger.info("All results are packaged in a single ZIP file.")
+            logger.info("Copy and paste this command on your local desktop:")
             logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
             
-            # Show CSV download command (one example)
-            if csv_files:
-                csv_file = csv_files[0]  # Use first CSV as example
-                filename = os.path.basename(csv_file)
-                full_path = os.path.abspath(csv_file)
-                logger.info("# Download CSV files (example):")
-                download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
-                logger.info(f"{download_cmd}\n")
+            filename = os.path.basename(archive_file)
+            full_path = os.path.abspath(archive_file)
             
-            # Show HTML graph download commands (all HTML files)
-            if html_files:
-                logger.info("# Download HTML graphs:")
-                for html_file in html_files:
-                    filename = os.path.basename(html_file)
-                    full_path = os.path.abspath(html_file)
-                    download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
-                    logger.info(f"{download_cmd}")
-                logger.info("")
+            logger.info("# Download all results (ZIP archive):")
+            download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
+            logger.info(f"{download_cmd}\n")
             
-            # List all available files
-            logger.info("All result files:")
-            for csv_file in csv_files:
-                logger.info(f"  - {os.path.abspath(csv_file)}")
-            for html_file in html_files:
-                logger.info(f"  - {os.path.abspath(html_file)}")
+            logger.info(f"Archive contains all CSV files, HTML graphs, and PNG images.")
+            logger.info(f"Archive location: {full_path}")
         
         logger.info("="*60)
         logger.info("OpenStack Tempest Test Runner Completed")

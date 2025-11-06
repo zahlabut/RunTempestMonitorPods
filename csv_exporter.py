@@ -8,6 +8,7 @@ CSV exporter and graph plotting module for test results and metrics.
 import logging
 import os
 import csv
+import zipfile
 from datetime import datetime
 from typing import List, Dict
 import pandas as pd
@@ -39,11 +40,16 @@ class CSVExporter:
         # Create results directory if it doesn't exist
         os.makedirs(results_dir, exist_ok=True)
         
+        # Archive old results if any exist
+        self._archive_old_results()
+        
         # Generate timestamped filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.timestamp = timestamp
         self.metrics_csv = os.path.join(results_dir, f"{csv_filename}_metrics_{timestamp}.csv")
         self.results_csv = os.path.join(results_dir, f"{csv_filename}_results_{timestamp}.csv")
         self.failed_tests_csv = os.path.join(results_dir, f"{csv_filename}_failed_tests_{timestamp}.csv")
+        self.archive_zip = os.path.join(results_dir, f"results_archive_{timestamp}.zip")
         
     def export_metrics(self, metrics: List[Dict]) -> str:
         """
@@ -371,4 +377,75 @@ class CSVExporter:
                 return float(mem_str) / (1024 * 1024)
         except (ValueError, AttributeError):
             return 0.0
+    
+    def _archive_old_results(self):
+        """Archive old results in the results directory to a zip file."""
+        try:
+            # Check if there are any files to archive
+            if not os.path.exists(self.results_dir):
+                return
+            
+            files_to_archive = [f for f in os.listdir(self.results_dir) 
+                               if f.endswith(('.csv', '.html', '.png', '.svg', '.pdf'))]
+            
+            if not files_to_archive:
+                logger.debug("No old results to archive")
+                return
+            
+            # Create archive filename
+            archive_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_name = os.path.join(self.results_dir, f"old_results_archive_{archive_timestamp}.zip")
+            
+            # Create zip file
+            with zipfile.ZipFile(archive_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for filename in files_to_archive:
+                    file_path = os.path.join(self.results_dir, filename)
+                    zipf.write(file_path, filename)
+                    logger.debug(f"Archived: {filename}")
+            
+            logger.info(f"Archived {len(files_to_archive)} old result files to {archive_name}")
+            
+            # Delete old files after archiving
+            for filename in files_to_archive:
+                file_path = os.path.join(self.results_dir, filename)
+                os.remove(file_path)
+                
+        except Exception as e:
+            logger.warning(f"Failed to archive old results: {e}")
+    
+    def create_results_archive(self) -> str:
+        """
+        Create a zip archive of all current result files.
+        
+        Returns:
+            Path to the created zip file
+        """
+        try:
+            # Collect all result files
+            files_to_zip = []
+            
+            for filename in os.listdir(self.results_dir):
+                # Skip old archives
+                if filename.startswith('old_results_archive_'):
+                    continue
+                # Include current result files
+                if filename.endswith(('.csv', '.html', '.png', '.svg', '.pdf')):
+                    files_to_zip.append(filename)
+            
+            if not files_to_zip:
+                logger.warning("No result files found to archive")
+                return ""
+            
+            # Create zip file
+            with zipfile.ZipFile(self.archive_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for filename in files_to_zip:
+                    file_path = os.path.join(self.results_dir, filename)
+                    zipf.write(file_path, filename)
+            
+            logger.info(f"Created results archive: {self.archive_zip} ({len(files_to_zip)} files)")
+            return self.archive_zip
+            
+        except Exception as e:
+            logger.error(f"Failed to create results archive: {e}")
+            return ""
 
