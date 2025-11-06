@@ -186,11 +186,18 @@ class CRHandler:
                     cr_data = json.loads(result.stdout)
                     
                     status = cr_data.get("status", {})
+                    phase = status.get("phase", status.get("state", "Unknown"))
+                    
+                    # Also check pod status - if pod is in Error, test is done
+                    pod_completed = self._check_pod_completion(cr_name)
+                    
+                    # Consider completed if either CR says so OR pod is in terminal state
+                    is_completed = self._is_completed(status) or pod_completed
                     
                     return {
-                        "phase": status.get("phase", status.get("state", "Unknown")),
-                        "completed": self._is_completed(status),
-                        "succeeded": self._is_succeeded(status),
+                        "phase": phase,
+                        "completed": is_completed,
+                        "succeeded": self._is_succeeded(status) and not pod_completed,
                         "message": status.get("message", ""),
                         "raw_status": status
                     }
@@ -215,6 +222,40 @@ class CRHandler:
                 "message": "Failed to parse status",
                 "raw_status": {}
             }
+    
+    def _check_pod_completion(self, cr_name: str) -> bool:
+        """
+        Check if pods associated with the CR are in terminal state (Error, Completed).
+        
+        Args:
+            cr_name: Name of the CR
+            
+        Returns:
+            True if pod is in terminal state (Error/Completed), False otherwise
+        """
+        try:
+            cmd = ["oc", "get", "pods", "-n", self.namespace, "-o", "json"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            pods_data = json.loads(result.stdout)
+            
+            # Look for pods matching the CR name
+            for pod in pods_data.get("items", []):
+                pod_name = pod["metadata"]["name"]
+                
+                if cr_name in pod_name:
+                    phase = pod.get("status", {}).get("phase", "Unknown")
+                    logger.debug(f"Found pod {pod_name} for CR {cr_name} with phase: {phase}")
+                    
+                    # Terminal states: Error, Failed, Succeeded
+                    if phase in ["Error", "Failed", "Succeeded"]:
+                        logger.info(f"Pod {pod_name} is in terminal state: {phase} - marking CR as completed")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            logger.debug(f"Failed to check pod completion for {cr_name}: {e}")
+            return False
     
     def wait_for_completion(self, cr_name: str, poll_interval: int = 30, 
                            shutdown_flag: Optional[threading.Event] = None) -> Tuple[bool, str]:
@@ -246,11 +287,11 @@ class CRHandler:
                     logger.info(msg)
                     return True, msg
                 else:
-                    msg = f"CR {cr_name} completed with failure: {status['message']}"
-                    logger.error(msg)
+                    msg = f"CR {cr_name} completed with failure (phase: {status['phase']}): {status['message']}"
+                    logger.warning(msg)
                     return False, msg
             
-            logger.debug(f"CR {cr_name} still running (phase: {status['phase']})")
+            logger.info(f"CR {cr_name} still running (phase: {status['phase']}, completed: {status['completed']})")
             
             # Use shutdown_flag.wait() if available to allow interruption
             if shutdown_flag:
