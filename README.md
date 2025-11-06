@@ -97,8 +97,8 @@ logging:
 ## Custom Resource Files
 
 Create your CR files for the Tempest tests you want to run. Example CR files are provided:
-- `cr_designate_test1.yaml` - Designate zones and recordsets tests
-- `cr_designate_test2.yaml` - Designate blacklists and pool tests
+- `designate_tempest_plugin_cr.yaml` - Designate zones and recordsets tests
+- `designate_neutron_integration_cr.yaml` - Designate blacklists and pool tests
 
 ### Example CR Structure
 

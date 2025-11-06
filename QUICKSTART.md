@@ -38,8 +38,8 @@ Edit `config.yaml`:
 ```yaml
 # Minimal configuration changes:
 cr_files:
-  - "cr_designate_test1.yaml"
-  - "cr_designate_test2.yaml"
+  - "designate_tempest_plugin_cr.yaml"
+  - "designate_neutron_integration_cr.yaml"
 
 time_to_run_hours: 0.5  # Run for 30 minutes
 
@@ -51,7 +51,7 @@ monitoring:
 
 ### Step 4: Verify CR Files
 
-Make sure your CR files (`cr_designate_test1.yaml`, `cr_designate_test2.yaml`) are properly configured:
+Make sure your CR files (`designate_tempest_plugin_cr.yaml`, `designate_neutron_integration_cr.yaml`) are properly configured:
 
 - Update `namespace` if different
 - Update `openStackConfigMap` and `openStackConfigSecret` names
@@ -139,7 +139,7 @@ Starting iteration 1
 2025-01-05 14:30:23 - INFO - [Iteration 1] Started CR: designate-tempest-test-2
 2025-01-05 14:30:53 - DEBUG - Collected metrics for 3 pods
 2025-01-05 14:35:45 - INFO - [Iteration 1] CR designate-tempest-test-1 completed successfully
-2025-01-05 14:35:45 - INFO - [Iteration 1] cr_designate_test1.yaml: PASSED
+2025-01-05 14:35:45 - INFO - [Iteration 1] designate_tempest_plugin_cr.yaml: PASSED
 ...
 ```
 

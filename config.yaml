@@ -5,8 +5,8 @@
 
 # List of Custom Resource files to apply
 cr_files:
-  - "cr_designate_test1.yaml"
-  - "cr_designate_test2.yaml"
+  - "designate_tempest_plugin_cr.yaml"
+  - "designate_neutron_integration_cr.yaml"
 
 # Duration to run tests (in hours)
 time_to_run_hours: 2
