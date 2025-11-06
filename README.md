@@ -216,7 +216,7 @@ Interactive HTML graph showing:
 - **Memory usage over time** (per pod) - Monitor memory footprint
 - **Container restarts over time** (per pod) - Detect stability issues
 
-**Example**: `pod_metrics_20251106_114457.html`
+**Example**: [📊 View Interactive Graph](docs/pod_metrics_20251106_114457.html)
 
 The graph displays multiple pods on a single interactive chart with:
 - Individual lines for each pod being monitored
@@ -239,7 +239,7 @@ Interactive HTML graph showing:
 - **Pass/Fail status timeline** - Visual test success tracking
 - **Test counts** (passed, failed, skipped) - Detailed breakdown per iteration
 
-**Example**: `test_results_20251106_114457.html`
+**Example**: Generated as `test_results_YYYYMMDD_HHMMSS.html`
 
 The graph visualizes:
 - Bar charts for pass/fail/skip counts per iteration
