@@ -225,7 +225,7 @@ The graph displays multiple pods on a single interactive chart with:
 
 **Example Graph:**
 
-![Pod Metrics Example](docs/pod_metrics_example.png)
+![Pod Metrics Example](docs/GraphExample.png)
 
 **What to look for in the graph:**
 - 📈 **Steady CPU/Memory**: Normal test execution
