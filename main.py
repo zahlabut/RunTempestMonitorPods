@@ -333,6 +333,7 @@ def main():
         monitor_thread.join(timeout=10)
         
         # Generate graphs
+        graph_files = []
         if config['output']['enable_graphs']:
             logger.info("Generating graphs...")
             graph_files = csv_exporter.generate_graphs()
@@ -354,6 +355,28 @@ def main():
         
         logger.info(f"\nMetrics CSV: {csv_exporter.metrics_csv}")
         logger.info(f"Results CSV: {csv_exporter.results_csv}")
+        
+        # Print download commands for HTML graphs
+        if graph_files:
+            import os
+            import socket
+            current_host = socket.gethostname()
+            current_dir = os.getcwd()
+            
+            logger.info("\n" + "="*60)
+            logger.info("DOWNLOAD COMMANDS FOR HTML RESULTS")
+            logger.info("="*60)
+            logger.info("Copy and paste these commands on your local desktop:")
+            logger.info("(Replace <your_bastion_host> with your actual bastion hostname)\n")
+            
+            for graph_file in graph_files:
+                filename = os.path.basename(graph_file)
+                full_path = os.path.abspath(graph_file)
+                
+                # Command to download HTML files via SSH
+                download_cmd = f'ssh -t root@<your_bastion_host> "su - zuul -c \'ssh -q controller-0 \"cat {full_path}\"\'" > {filename}'
+                logger.info(f"{download_cmd}\n")
+        
         logger.info("="*60)
         logger.info("OpenStack Tempest Test Runner Completed")
         logger.info("="*60)
