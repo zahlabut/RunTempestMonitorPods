@@ -236,18 +236,21 @@ Contains detailed information about failed tests extracted from pod logs:
 | `test_number` | Test sequence number |
 | `test_name` | Full test name (class.method) |
 | `duration` | Test execution time |
+| `logged_line` | Raw log line from pod (preserves original format) |
 
 **Example:**
 ```csv
-timestamp,iteration,cr_name,pod_name,test_number,test_name,duration
-2025-11-06T13:16:34.123456,1,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,222.489823s
-2025-11-06T13:35:21.789012,2,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,225.123456s
+timestamp,iteration,cr_name,pod_name,test_number,test_name,duration,logged_line
+2025-11-06T13:16:34.123456,1,tempest-neutron-dns-tests,pod-name,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,222.489823s,"{3} neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip [222.489823s] ... FAILED"
+2025-11-06T13:35:21.789012,2,tempest-neutron-dns-tests,pod-name,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,225.123456s,"{3} neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip [225.123456s] ... FAILED"
 ```
 
 This CSV helps identify patterns in test failures across multiple iterations. The **iteration column** allows you to:
 - Track which iterations a specific test failed
 - Identify if failures are consistent or intermittent
 - Correlate failures with environmental changes
+
+The **logged_line column** preserves the exact format from pod logs for reference and debugging.
 
 ### Graphs
 

@@ -351,6 +351,7 @@ class CRHandler:
                                 test_number = match.group(1)
                                 test_name = match.group(2).strip()
                                 duration = match.group(3).strip()
+                                raw_line = line.strip()  # Preserve original log line
                                 
                                 failed_test = {
                                     'timestamp': datetime.now().isoformat(),
@@ -359,7 +360,8 @@ class CRHandler:
                                     'pod_name': pod_name,
                                     'test_number': test_number,
                                     'test_name': test_name,
-                                    'duration': duration
+                                    'duration': duration,
+                                    'logged_line': raw_line
                                 }
                                 
                                 failed_tests.append(failed_test)
