@@ -55,8 +55,8 @@ spec:
     tempestRun:
       concurrency: 1
       includeList: |
-        #^neutron_tempest_plugin.scenario.test_dns_integration
-        ^neutron_tempest_plugin.scenario.test_internal_dns
+        ^neutron_tempest_plugin.scenario.test_dns_integration
+        #^neutron_tempest_plugin.scenario.test_internal_dns
       extraImages:
       - ID: 11111111-1111-1111-1111-111111111111
         URL: http://10.0.152.55/dfg-network/custom_neutron_guest_rhel_8.4.qcow2
