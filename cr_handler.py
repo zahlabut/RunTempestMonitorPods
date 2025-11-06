@@ -311,12 +311,13 @@ class CRHandler:
             logger.debug(f"Error checking logs for {pod_name}: {e}")
             return False
     
-    def extract_failed_tests(self, cr_name: str) -> list:
+    def extract_failed_tests(self, cr_name: str, iteration: int = 0) -> list:
         """
         Extract failed test details from pod logs.
         
         Args:
             cr_name: Name of the CR
+            iteration: Current iteration number
             
         Returns:
             List of dictionaries containing failed test information
@@ -352,16 +353,17 @@ class CRHandler:
                                 duration = match.group(3).strip()
                                 
                                 failed_test = {
+                                    'timestamp': datetime.now().isoformat(),
+                                    'iteration': iteration,
                                     'cr_name': cr_name,
                                     'pod_name': pod_name,
                                     'test_number': test_number,
                                     'test_name': test_name,
-                                    'duration': duration,
-                                    'timestamp': datetime.now().isoformat()
+                                    'duration': duration
                                 }
                                 
                                 failed_tests.append(failed_test)
-                                logger.info(f"Found failed test: {test_name} (duration: {duration})")
+                                logger.info(f"Found failed test: {{{test_number}}} {test_name} [{duration}] ... FAILED")
                     
                     # Only check the first matching pod
                     break

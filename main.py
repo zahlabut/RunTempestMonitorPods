@@ -176,7 +176,7 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
     
     # Extract failed tests from pod logs before cleanup
     logger.info(f"[Iteration {iteration}] Extracting failed tests for CR: {cr_name}")
-    failed_tests = cr_handler.extract_failed_tests(cr_name)
+    failed_tests = cr_handler.extract_failed_tests(cr_name, iteration)
     
     # Store failed tests in results for export
     results["failed_tests"] = failed_tests

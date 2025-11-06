@@ -139,7 +139,7 @@ class CSVExporter:
         
         try:
             # Define CSV headers
-            headers = ["timestamp", "cr_name", "pod_name", "test_number", "test_name", "duration"]
+            headers = ["timestamp", "iteration", "cr_name", "pod_name", "test_number", "test_name", "duration"]
             
             file_exists = os.path.exists(self.failed_tests_csv)
             

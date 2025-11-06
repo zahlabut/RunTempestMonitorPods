@@ -230,6 +230,7 @@ Contains detailed information about failed tests extracted from pod logs:
 | Column | Description |
 |--------|-------------|
 | `timestamp` | When the failed test was detected |
+| `iteration` | Test loop iteration number (1, 2, 3...) |
 | `cr_name` | Name of the Custom Resource |
 | `pod_name` | Name of the test pod |
 | `test_number` | Test sequence number |
@@ -238,11 +239,15 @@ Contains detailed information about failed tests extracted from pod logs:
 
 **Example:**
 ```csv
-timestamp,cr_name,pod_name,test_number,test_name,duration
-2025-11-06T13:16:34.123456,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,222.489823s
+timestamp,iteration,cr_name,pod_name,test_number,test_name,duration
+2025-11-06T13:16:34.123456,1,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,222.489823s
+2025-11-06T13:35:21.789012,2,tempest-neutron-dns-tests,tempest-neutron-dns-tests-s00-neutron-dns-integration-testing,3,neutron_tempest_plugin.scenario.test_basic.NetworkBasicTest.test_ping_global_ip_from_vm_with_fip,225.123456s
 ```
 
-This CSV helps identify patterns in test failures across multiple iterations.
+This CSV helps identify patterns in test failures across multiple iterations. The **iteration column** allows you to:
+- Track which iterations a specific test failed
+- Identify if failures are consistent or intermittent
+- Correlate failures with environmental changes
 
 ### Graphs
 
