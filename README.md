@@ -162,6 +162,19 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 
 ## Output
 
+### Automatic Archiving
+
+**Important**: The tool automatically manages the results directory:
+
+- 📦 **On Startup**: Any existing result files are archived to `old_results_archive_{timestamp}.zip` and removed from the directory
+- 📦 **On Completion**: All current results are packaged into `results_archive_{timestamp}.zip`
+- 🧹 **Clean Workspace**: Each run starts with a clean results directory
+
+This ensures you always have:
+- Clean, organized results for the current run
+- Archived history from previous runs
+- Easy download via a single ZIP file
+
 ### Directory Structure
 
 After running, the `results/` directory will contain:
@@ -174,7 +187,9 @@ results/
 ├── pod_metrics_20250105_153045.html
 ├── pod_metrics_20250105_153045.png
 ├── test_results_20250105_153045.html
-└── test_results_20250105_153045.png
+├── test_results_20250105_153045.png
+├── results_archive_20250105_143022.zip          # All current results
+└── old_results_archive_20250105_140000.zip      # Previous run (if any)
 ```
 
 ### CSV Files
@@ -280,21 +295,34 @@ All graphs are also exported as static images (PNG/SVG/PDF).
 
 ### Downloading Result Files
 
-After the test run completes, download commands are displayed:
+After the test run completes, a **single download command** is displayed in color:
 
 ```bash
 ============================================================
-DOWNLOAD COMMANDS FOR RESULT FILES
+DOWNLOAD COMMAND FOR RESULTS ARCHIVE
 ============================================================
-Copy and paste these commands on your local desktop:
+All results are packaged in a single ZIP file.
+Copy and paste this command on your local desktop:
 (Replace <your_bastion_host> with your actual bastion hostname)
 
-ssh -t root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 "cat /path/to/tempest_monitoring_metrics_20251106_120613.csv"'" > tempest_monitoring_metrics_20251106_120613.csv
+# Download all results (ZIP archive):
+ssh root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 \"base64 /path/to/results_archive_20251106_143022.zip\"'" | base64 -d > results_archive_20251106_143022.zip
 
-ssh -t root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 "cat /path/to/pod_metrics_20251106_114457.html"'" > pod_metrics_20251106_114457.html
+Note: Using base64 encoding to safely transfer binary ZIP file
+
+Archive contains: CSV files, HTML graphs, and PNG images
+Archive size: 2.85 MB
+Archive location: /path/to/results_archive_20251106_143022.zip
+============================================================
 ```
 
-Simply copy and execute these commands on your local machine to download all result files including interactive HTML graphs.
+**Benefits:**
+- ✅ Single command to download everything
+- ✅ Base64 encoding prevents file corruption
+- ✅ All results (CSV, HTML, PNG) in one ZIP
+- ✅ Colored output for easy visibility
+
+Simply copy and execute the command, then extract: `unzip results_archive_*.zip`
 
 ## Architecture
 
