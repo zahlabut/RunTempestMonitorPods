@@ -365,22 +365,24 @@ The graph displays multiple pods on a single interactive chart with:
 
 #### Test Results Graph
 
-Interactive HTML graph showing:
-- **Pass/Fail status timeline** - Visual test success tracking
-- **Test counts** (passed, failed, skipped) - Detailed breakdown per iteration
+Interactive HTML graph showing **test counts by CR and time**:
+- **Grouped bar chart** - Shows passed, failed, and skipped tests for each CR
+- **Color-coded bars** - Green (passed), Red (failed), Orange (skipped)
+- **Clear CR identification** - Each CR shown separately with timestamp
 
 **Example**: Generated as `test_results_YYYYMMDD_HHMMSS.html`
 
 The graph visualizes:
-- Bar charts for pass/fail/skip counts per iteration
-- Color-coded status indicators (green=pass, red=fail, yellow=skip)
-- Success rate trends over multiple iterations
-- Iteration timing and duration
+- Test counts grouped by CR name and execution time
+- Easy comparison between different CRs and iterations
+- Hover tooltips showing exact counts
+- Clear visual distinction between passed/failed/skipped
 
 **What to look for in the graph:**
-- ✅ **Consistent passes**: Stable test suite
-- ❌ **Failed tests**: Investigation needed
-- 📉 **Degrading success rate**: Potential environment issues
+- ✅ **High green bars**: Many passed tests
+- ❌ **Red bars**: Failed tests needing investigation
+- 🟠 **Orange bars**: Skipped tests (may indicate configuration issues)
+- 📊 **Bar patterns**: Compare results across different CRs and iterations
 
 #### Test Execution Times Graph
 

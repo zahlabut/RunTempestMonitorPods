@@ -339,51 +339,46 @@ class CSVExporter:
             # Log test count data for debugging
             logger.debug(f"Test counts - Passed: {df['tests_passed'].sum()}, Failed: {df['tests_failed'].sum()}, Skipped: {df['tests_skipped'].sum()}")
             
-            # Create figure with subplots
-            fig = make_subplots(
-                rows=2, cols=1,
-                subplot_titles=('Test Pass/Fail Status', 'Test Counts'),
-                vertical_spacing=0.15
-            )
+            # Create figure with single plot showing test counts
+            # (removed confusing binary pass/fail subplot)
+            fig = go.Figure()
             
-            # Pass/Fail timeline
+            # Add test counts as grouped bars with CR names
             for cr_name in df['cr_name'].unique():
                 cr_data = df[df['cr_name'] == cr_name]
-                passed_numeric = cr_data['passed'].apply(lambda x: 1 if x else 0)
+                
+                # Create x-axis labels with CR name and timestamp
+                x_labels = [f"{cr_name}<br>{ts.strftime('%H:%M:%S')}" for ts in cr_data['timestamp']]
                 
                 fig.add_trace(
-                    go.Scatter(x=cr_data['timestamp'], y=passed_numeric,
-                              mode='markers', name=cr_name,
-                              marker=dict(size=10)),
-                    row=1, col=1
+                    go.Bar(x=x_labels, y=cr_data['tests_passed'], 
+                           name=f'{cr_name} - Passed',
+                           marker_color='green',
+                           hovertemplate='<b>%{x}</b><br>Passed: %{y}<extra></extra>')
                 )
-            
-            # Test counts stacked bar
-            fig.add_trace(
-                go.Bar(x=df['timestamp'], y=df['tests_passed'], name='Passed', marker_color='green'),
-                row=2, col=1
-            )
-            fig.add_trace(
-                go.Bar(x=df['timestamp'], y=df['tests_failed'], name='Failed', marker_color='red'),
-                row=2, col=1
-            )
-            fig.add_trace(
-                go.Bar(x=df['timestamp'], y=df['tests_skipped'], name='Skipped', marker_color='orange'),
-                row=2, col=1
-            )
+                fig.add_trace(
+                    go.Bar(x=x_labels, y=cr_data['tests_failed'], 
+                           name=f'{cr_name} - Failed',
+                           marker_color='red',
+                           hovertemplate='<b>%{x}</b><br>Failed: %{y}<extra></extra>')
+                )
+                fig.add_trace(
+                    go.Bar(x=x_labels, y=cr_data['tests_skipped'], 
+                           name=f'{cr_name} - Skipped',
+                           marker_color='orange',
+                           hovertemplate='<b>%{x}</b><br>Skipped: %{y}<extra></extra>')
+                )
             
             # Update layout
             fig.update_layout(
-                height=700,
-                title_text="Test Results Over Time",
+                height=600,
+                title_text="Test Results by CR and Time",
+                xaxis_title="CR Name / Time",
+                yaxis_title="Test Count",
                 showlegend=True,
-                barmode='stack'
+                barmode='group',
+                xaxis={'tickangle': -45}
             )
-            
-            # Update axes
-            fig.update_xaxes(title_text="Time", row=2, col=1)
-            fig.update_yaxes(title_text="Status (0=Fail, 1=Pass)", row=1, col=1)
-            fig.update_yaxes(title_text="Test Count", row=2, col=1)
             
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
