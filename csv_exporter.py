@@ -530,10 +530,14 @@ class CSVExporter:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.sort_values('timestamp')
             
+            # Check if we have timing data
+            has_timing = (df['response_time'] > 0).any()
+            timing_note = "" if has_timing else " (Timing data not available)"
+            
             # Create figure with subplots
             fig = make_subplots(
                 rows=3, cols=1,
-                subplot_titles=('API Response Times Over Time', 'Response Code Distribution', 'Error Rate Timeline'),
+                subplot_titles=(f'API Response Times Over Time{timing_note}', 'Response Code Distribution', 'Error Rate Timeline'),
                 vertical_spacing=0.12,
                 specs=[[{"secondary_y": False}],
                        [{"type": "bar"}],

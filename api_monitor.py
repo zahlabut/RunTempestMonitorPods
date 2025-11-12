@@ -102,18 +102,19 @@ class APIMonitor:
             logs = result.stdout
             
             # Common OpenStack API log patterns
-            # Format: 2024-11-12 20:30:45.123 INFO [req-id] METHOD /path STATUS TIME
             patterns = [
-                # Pattern 1: Standard OpenStack format
+                # Pattern 1: Standard OpenStack format with timing
                 r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+).*?"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^"]+)"\s+status:\s+(\d+)\s+len:\s+\d+\s+time:\s+([\d.]+)',
-                # Pattern 2: Apache/WSGI format
+                # Pattern 2: Apache access log with timing in seconds at end
                 r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+).*?(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\S+)\s+.*?\s+(\d{3})\s+([\d.]+)',
-                # Pattern 3: Simpler format
+                # Pattern 3: Simpler format with timing
                 r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}).*?(GET|POST|PUT|DELETE|PATCH)\s+([^\s]+).*?(\d{3}).*?([\d.]+)s',
+                # Pattern 4: Apache/WSGI access log format WITHOUT timing (e.g., "IP - - [DD/Mon/YYYY:HH:MM:SS +0000] "METHOD /path HTTP/1.1" STATUS ...")
+                r'\[(\d{2}/\w+/\d{4}:\d{2}:\d{2}:\d{2})\s+[+\-]\d{4}\]\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\S+)\s+HTTP/[\d.]+"\s+(\d{3})',
             ]
             
             for line in logs.split('\n'):
-                for pattern in patterns:
+                for pattern_idx, pattern in enumerate(patterns):
                     match = re.search(pattern, line, re.IGNORECASE)
                     if match:
                         try:
@@ -121,13 +122,31 @@ class APIMonitor:
                             method = match.group(2).upper()
                             endpoint = match.group(3)
                             status_code = int(match.group(4))
-                            response_time = float(match.group(5))
                             
-                            # Parse timestamp
+                            # Pattern 4 (Apache access log) doesn't have timing, set to 0
+                            if pattern_idx == 3:  # Pattern 4
+                                response_time = 0.0
+                            else:
+                                response_time = float(match.group(5))
+                            
+                            # Parse timestamp based on format
                             try:
-                                timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S.%f')
-                            except ValueError:
-                                timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                                if '/' in timestamp_str:
+                                    # Apache format: "12/Nov/2025:21:14:49"
+                                    timestamp = datetime.strptime(timestamp_str, '%d/%b/%Y:%H:%M:%S')
+                                elif '.' in timestamp_str:
+                                    # ISO format with microseconds
+                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S.%f')
+                                else:
+                                    # ISO format without microseconds
+                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                            except ValueError as e:
+                                logger.debug(f"Could not parse timestamp '{timestamp_str}': {e}")
+                                continue
+                            
+                            # Skip healthcheck endpoints (Kubernetes probes)
+                            if '/healthcheck' in endpoint.lower():
+                                continue
                             
                             request_info = {
                                 'timestamp': timestamp,
@@ -148,7 +167,13 @@ class APIMonitor:
                             continue
                         break
             
-            logger.info(f"Parsed {len(requests)} API requests from {pod_name}")
+            if requests:
+                # Count requests with and without timing
+                with_timing = sum(1 for r in requests if r['response_time'] > 0)
+                logger.info(f"Parsed {len(requests)} API requests from {pod_name} ({with_timing} with timing data)")
+            else:
+                logger.warning(f"No API requests found in {pod_name} logs (checked {len(logs.split(chr(10)))} lines)")
+            
             return requests
             
         except Exception as e:
