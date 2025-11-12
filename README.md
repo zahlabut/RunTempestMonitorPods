@@ -195,13 +195,14 @@ results/
 ├── test_execution_times_20250105_153045.html
 ├── test_execution_times_20250105_153045.png
 ├── test_results_20250105_153045.png
-├── web_report/                                          # 🌐 HTTP server-ready (all-in-one)
-│   ├── index.html                                      # Main landing page
-│   ├── pod_metrics_20250105_153045.html                # Interactive graphs
-│   ├── test_results_20250105_153045.html
-│   ├── test_execution_times_20250105_153045.html
-│   ├── tempest_monitoring_*.csv                        # All CSV data
-│   └── *.png, *.svg, *.pdf                            # All static images
+├── web_report/                                          # 🌐 HTTP server-ready
+│   ├── index.html                                      # Landing page (at root)
+│   └── src/                                            # All supporting files
+│       ├── pod_metrics_20250105_153045.html            # Interactive graphs
+│       ├── test_results_20250105_153045.html
+│       ├── test_execution_times_20250105_153045.html
+│       ├── tempest_monitoring_*.csv                    # All CSV data
+│       └── *.png, *.svg, *.pdf                        # All static images
 ├── results_archive_20250105_143022.zip                 # 📦 Contains only web_report/
 └── old_results_archive_20250105_140000.zip             # Previous run archive
 ```
@@ -375,20 +376,21 @@ The tool automatically generates a **web-ready report** in `results/web_report/`
 #### Directory Structure
 ```
 results/web_report/
-├── index.html                                        # Main landing page
-├── pod_metrics_*.html                                # Interactive CPU/Memory graph
-├── test_results_*.html                               # Interactive test results graph
-├── test_execution_times_*.html                       # Interactive timing graph
-├── tempest_monitoring_metrics_*.csv                  # Pod metrics data
-├── tempest_monitoring_results_*.csv                  # Test results data
-├── tempest_monitoring_failed_tests_*.csv            # Failed tests data
-├── tempest_monitoring_test_execution_times_*.csv    # Test timing data
-├── pod_metrics_*.png                                # Static images
-├── test_results_*.png
-└── test_execution_times_*.png
+├── index.html                                        # Main landing page (at root)
+└── src/                                             # All supporting files
+    ├── pod_metrics_*.html                           # Interactive graphs
+    ├── test_results_*.html
+    ├── test_execution_times_*.html
+    ├── tempest_monitoring_metrics_*.csv             # CSV data files
+    ├── tempest_monitoring_results_*.csv
+    ├── tempest_monitoring_failed_tests_*.csv
+    ├── tempest_monitoring_test_execution_times_*.csv
+    ├── pod_metrics_*.png                            # Static images
+    ├── test_results_*.png
+    └── test_execution_times_*.png
 ```
 
-**All files in one place!** Simple, clean, and easy to access.
+**Clean web structure**: `index.html` at root, all resources in `src/` subdirectory.
 
 #### Features of the Web Report
 
@@ -416,12 +418,14 @@ results/web_report/
 
 1. **After test completion**, find the web report at:
    ```
-   results/web_report/index.html
+   results/web_report/
+   ├── index.html
+   └── src/
    ```
 
 2. **Upload to HTTP server**:
    ```bash
-   # Example using scp to upload to web server
+   # Upload entire web_report directory
    scp -r results/web_report/ user@webserver:/var/www/html/tempest-results/
    
    # Or using rsync
@@ -430,6 +434,8 @@ results/web_report/
 
 3. **Access via browser**:
    ```
+   http://your-server.com/tempest-results/
+   # or
    http://your-server.com/tempest-results/index.html
    ```
 
@@ -443,9 +449,9 @@ results/web_report/
 ✅ **Professional Presentation**: Impress stakeholders with a polished report  
 ✅ **Easy Sharing**: Just upload and share a URL  
 ✅ **No Dependencies**: Pure HTML/CSS, works on any web server  
-✅ **Self-Contained**: All files in one directory, no complex folder structure  
+✅ **Clean Web Structure**: `index.html` at root, resources in `src/` subdirectory  
 ✅ **Interactive**: Team members can explore graphs and download data  
-✅ **Simple Structure**: Everything in one place - graphs, CSVs, and images together  
+✅ **Standard Layout**: Follows common web conventions for easy deployment  
 
 ### Downloading Result Files
 
@@ -483,16 +489,14 @@ unzip results_archive_20251106_143022.zip
 
 # You'll have:
 # web_report/
-#   ├── index.html
-#   ├── *.html (graphs)
-#   ├── *.csv (data)
-#   └── *.png (images)
+#   ├── index.html           (landing page at root)
+#   └── src/                 (all graphs, CSVs, images)
 
-# Upload web report to HTTP server (everything in one directory!)
+# Upload web report to HTTP server
 scp -r web_report/ user@webserver:/var/www/html/tempest-results/
 
-# Or just upload and rename
-scp -r web_report/ user@webserver:/var/www/html/my-test-results/
+# Access via: http://your-server.com/tempest-results/index.html
+# or just:    http://your-server.com/tempest-results/
 ```
 - ✅ Colored output for easy visibility
 
