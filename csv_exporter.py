@@ -541,43 +541,30 @@ class CSVExporter:
     
     def create_results_archive(self) -> str:
         """
-        Create a zip archive of all current result files including web_report.
+        Create a zip archive containing only the web_report directory.
         
         Returns:
             Path to the created zip file
         """
         try:
-            # Collect all result files
-            files_to_zip = []
+            web_report_dir = os.path.join(self.results_dir, 'web_report')
             
-            for filename in os.listdir(self.results_dir):
-                # Skip old archives and the new archive being created
-                if filename.startswith('old_results_archive_') or filename == os.path.basename(self.archive_zip):
-                    continue
-                # Include current result files
-                if filename.endswith(('.csv', '.html', '.png', '.svg', '.pdf')):
-                    files_to_zip.append(filename)
+            if not os.path.exists(web_report_dir):
+                logger.warning("web_report directory does not exist, cannot create archive")
+                return ""
             
-            # Create zip file
+            # Create zip file containing only web_report directory
             with zipfile.ZipFile(self.archive_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # Add individual result files
-                for filename in files_to_zip:
-                    file_path = os.path.join(self.results_dir, filename)
-                    zipf.write(file_path, filename)
-                
-                # Add web_report directory if it exists
-                web_report_dir = os.path.join(self.results_dir, 'web_report')
-                if os.path.exists(web_report_dir):
-                    for root, dirs, files in os.walk(web_report_dir):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            # Create relative path for zip archive
-                            arcname = os.path.relpath(file_path, self.results_dir)
-                            zipf.write(file_path, arcname)
-                    logger.info(f"Added web_report directory to archive")
+                file_count = 0
+                for root, dirs, files in os.walk(web_report_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Create relative path for zip archive (relative to results dir)
+                        arcname = os.path.relpath(file_path, self.results_dir)
+                        zipf.write(file_path, arcname)
+                        file_count += 1
             
-            total_items = len(files_to_zip) + (1 if os.path.exists(web_report_dir) else 0)
-            logger.info(f"Created results archive: {self.archive_zip} ({len(files_to_zip)} files + web_report)")
+            logger.info(f"Created results archive: {self.archive_zip} (web_report with {file_count} files)")
             return self.archive_zip
             
         except Exception as e:

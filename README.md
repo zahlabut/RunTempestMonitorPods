@@ -169,14 +169,15 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 **Important**: The tool automatically manages the results directory:
 
 - 📦 **On Startup**: Any existing result files are archived to `old_results_archive_{timestamp}.zip` and removed from the directory
-- 📦 **On Completion**: All current results are packaged into `results_archive_{timestamp}.zip`
-  - Includes: CSV files, HTML graphs, PNG/SVG/PDF images, and complete `web_report/` directory
+- 📦 **On Completion**: The `web_report/` directory is packaged into `results_archive_{timestamp}.zip`
+  - Contains: index.html, all graphs (HTML), all CSV files, and all images
+  - Ready to extract and upload directly to web server
 - 🧹 **Clean Workspace**: Each run starts with a clean results directory
 
 This ensures you always have:
 - Clean, organized results for the current run
 - Archived history from previous runs
-- Easy download via a single ZIP file (includes HTTP-ready web report)
+- Single self-contained web report directory in ZIP file
 
 ### Directory Structure
 
@@ -184,7 +185,7 @@ After running, the `results/` directory will contain:
 
 ```
 results/
-├── tempest_monitoring_metrics_20250105_143022.csv
+├── tempest_monitoring_metrics_20250105_143022.csv       # Raw files for local inspection
 ├── tempest_monitoring_results_20250105_143022.csv
 ├── tempest_monitoring_failed_tests_20250105_143022.csv
 ├── tempest_monitoring_test_execution_times_20250105_143022.csv
@@ -194,14 +195,18 @@ results/
 ├── test_execution_times_20250105_153045.html
 ├── test_execution_times_20250105_153045.png
 ├── test_results_20250105_153045.png
-├── web_report/                                   # HTTP server-ready report (all files in one directory)
-│   ├── index.html                               # Main landing page with links
-│   ├── *.html                                   # All interactive graphs
-│   ├── *.csv                                    # All CSV data files
-│   └── *.png, *.svg, *.pdf                     # All static images
-├── results_archive_20250105_143022.zip          # All current results
-└── old_results_archive_20250105_140000.zip      # Previous run (if any)
+├── web_report/                                          # 🌐 HTTP server-ready (all-in-one)
+│   ├── index.html                                      # Main landing page
+│   ├── pod_metrics_20250105_153045.html                # Interactive graphs
+│   ├── test_results_20250105_153045.html
+│   ├── test_execution_times_20250105_153045.html
+│   ├── tempest_monitoring_*.csv                        # All CSV data
+│   └── *.png, *.svg, *.pdf                            # All static images
+├── results_archive_20250105_143022.zip                 # 📦 Contains only web_report/
+└── old_results_archive_20250105_140000.zip             # Previous run archive
 ```
+
+**Note**: The ZIP archive contains **only** the `web_report/` directory - no duplicate files!
 
 ### CSV Files
 
@@ -459,7 +464,7 @@ ssh root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 \"base64 /path/t
 
 Note: Using base64 encoding to safely transfer binary ZIP file
 
-Archive contains: CSV files, HTML graphs, PNG images, and complete web_report directory
+Archive contains: Complete web_report/ directory (index.html + all graphs, CSVs, and images)
 Archive size: 2.85 MB
 Archive location: /path/to/results_archive_20251106_143022.zip
 ============================================================
@@ -468,8 +473,8 @@ Archive location: /path/to/results_archive_20251106_143022.zip
 **Benefits:**
 - ✅ Single command to download everything
 - ✅ Base64 encoding prevents file corruption
-- ✅ All results (CSV, HTML, PNG) in one ZIP
-- ✅ Includes complete `web_report/` directory ready for HTTP server upload
+- ✅ Clean single directory structure
+- ✅ Ready to upload directly to HTTP server
 
 **After extracting the ZIP:**
 ```bash
@@ -477,11 +482,17 @@ Archive location: /path/to/results_archive_20251106_143022.zip
 unzip results_archive_20251106_143022.zip
 
 # You'll have:
-# - Individual CSV and HTML files
-# - web_report/ directory (ready to upload to web server)
+# web_report/
+#   ├── index.html
+#   ├── *.html (graphs)
+#   ├── *.csv (data)
+#   └── *.png (images)
 
-# Upload web report to HTTP server
+# Upload web report to HTTP server (everything in one directory!)
 scp -r web_report/ user@webserver:/var/www/html/tempest-results/
+
+# Or just upload and rename
+scp -r web_report/ user@webserver:/var/www/html/my-test-results/
 ```
 - ✅ Colored output for easy visibility
 
