@@ -46,15 +46,49 @@ oc login -u system:admin
 oc project openstack
 ```
 
+## Project Structure
+
+```
+RunTempestMonitorPods/
+├── CR_files/                           # Custom Resource YAML files
+│   ├── designate_tempest_plugin_cr.yaml
+│   └── designate_neutron_integration_cr.yaml
+├── main.py                             # Main orchestrator
+├── cr_handler.py                       # CR lifecycle management
+├── pod_monitor.py                      # Pod metrics collection
+├── csv_exporter.py                     # Data export and visualization
+├── config.yaml                         # Configuration file
+├── requirements.txt                    # Python dependencies
+├── setup.sh                            # Setup script
+├── results/                            # Generated results (auto-created)
+│   ├── *.csv                          # CSV data files
+│   ├── *.html                         # Interactive graphs
+│   ├── *.png                          # Static images
+│   └── web_report/                    # HTTP-ready web report
+└── README.md                          # This file
+```
+
 ## Configuration
+
+### 1. Organize Your CR Files
+
+Create a `CR_files/` directory and place your Custom Resource YAML files there:
+
+```bash
+mkdir -p CR_files
+# Move your CR files into this directory
+# mv *.yaml CR_files/  # if you have existing CR files in root
+```
+
+### 2. Edit Configuration
 
 Edit `config.yaml` to customize the test runner:
 
 ```yaml
-# List of CR files to run
+# List of CR files to run (relative to project root)
 cr_files:
-  - "designate_neutron_integration_cr.yaml"
-  - "designate_tempest_plugin_cr.yaml"
+  - "CR_files/designate_neutron_integration_cr.yaml"
+  - "CR_files/designate_tempest_plugin_cr.yaml"
 
 # Duration to run tests (in hours)
 time_to_run_hours: 2
@@ -102,9 +136,9 @@ logging:
 
 ## Custom Resource Files
 
-Create your CR files for the Tempest tests you want to run. Example CR files are provided:
-- `designate_tempest_plugin_cr.yaml` - All Designate tempest plugin tests
-- `designate_neutron_integration_cr.yaml` - Neutron-Designate integration tests from neutron tempest plugin
+Create your CR files for the Tempest tests you want to run in the `CR_files/` directory. Example CR files are provided:
+- `CR_files/designate_tempest_plugin_cr.yaml` - All Designate tempest plugin tests
+- `CR_files/designate_neutron_integration_cr.yaml` - Neutron-Designate integration tests from neutron tempest plugin
 
 ### Example CR Structure
 

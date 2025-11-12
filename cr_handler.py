@@ -412,15 +412,16 @@ class CRHandler:
                         
                         # Parse for all test executions (PASSED, FAILED, SKIPPED)
                         # Format: {3} test.class.name [time] ... STATUS
-                        test_pattern = r'\{(\d+)\}\s+([^\[]+)\s+\[([^\]]+)\]\s+\.\.\.\s+(PASSED|FAILED|SKIPPED|OK)'
+                        # Note: Use case-insensitive matching as logs may have 'ok' or 'OK'
+                        test_pattern = r'\{(\d+)\}\s+([^\[]+)\s+\[([^\]]+)\]\s+\.\.\.\s+(PASSED|FAILED|SKIPPED|OK|ok)'
                         
                         for line in logs.split('\n'):
-                            match = re.search(test_pattern, line)
+                            match = re.search(test_pattern, line, re.IGNORECASE)
                             if match:
                                 test_number = match.group(1)
                                 test_name = match.group(2).strip()
                                 duration_str = match.group(3).strip()
-                                status = match.group(4)
+                                status = match.group(4).upper()  # Normalize to uppercase
                                 
                                 # Convert duration to seconds (remove 's' if present)
                                 duration_seconds = float(duration_str.rstrip('s'))

@@ -418,8 +418,15 @@ class CSVExporter:
             # Convert duration to numeric
             df['duration_seconds'] = pd.to_numeric(df['duration_seconds'], errors='coerce').fillna(0)
             
+            # Normalize status values to uppercase for consistent coloring
+            df['status'] = df['status'].str.upper()
+            
             # Sort by test_name for better visualization
             df = df.sort_values(['test_name', 'timestamp'])
+            
+            # Log status distribution for debugging
+            status_counts = df['status'].value_counts()
+            logger.debug(f"Test execution status distribution: {status_counts.to_dict()}")
             
             # Create figure
             fig = go.Figure()
@@ -427,21 +434,26 @@ class CSVExporter:
             # Add a bar for each test, colored by status
             color_map = {
                 'PASSED': 'green',
+                'OK': 'green',      # 'ok' gets normalized to 'OK'
                 'FAILED': 'red',
                 'SKIPPED': 'orange',
-                'OK': 'green'
+                'SKIP': 'orange'    # Alternative spelling
             }
             
             for status in df['status'].unique():
                 status_data = df[df['status'] == status]
+                color = color_map.get(status, 'blue')  # Default to blue for unknown statuses
+                
+                logger.debug(f"Plotting {len(status_data)} tests with status '{status}' in color '{color}'")
+                
                 fig.add_trace(go.Bar(
                     x=status_data['test_name'],
                     y=status_data['duration_seconds'],
                     name=status,
-                    marker_color=color_map.get(status, 'blue'),
+                    marker_color=color,
                     text=status_data['duration_seconds'].round(2),
                     textposition='auto',
-                    hovertemplate='<b>%{x}</b><br>Duration: %{y:.2f}s<br>Iteration: %{customdata[0]}<extra></extra>',
+                    hovertemplate='<b>%{x}</b><br>Duration: %{y:.2f}s<br>Status: ' + status + '<br>Iteration: %{customdata[0]}<extra></extra>',
                     customdata=status_data[['iteration']].values
                 ))
             

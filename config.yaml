@@ -3,10 +3,10 @@
 
 # OpenStack Tempest Test Runner Configuration
 
-# List of Custom Resource files to apply
+# List of Custom Resource files to apply (relative to project root)
 cr_files:
-  - "designate_tempest_plugin_cr.yaml"
-  - "designate_neutron_integration_cr.yaml"
+  - "CR_files/designate_tempest_plugin_cr.yaml"
+  - "CR_files/designate_neutron_integration_cr.yaml"
 
 # Duration to run tests (in hours)
 time_to_run_hours: 2
