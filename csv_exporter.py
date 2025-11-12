@@ -508,6 +508,181 @@ class CSVExporter:
             logger.error(f"Error generating test execution times graph: {e}")
             return ""
     
+    def generate_api_performance_graph(self, api_data: dict) -> str:
+        """
+        Generate graph for API performance metrics.
+        
+        Args:
+            api_data: Dictionary with API analysis results
+            
+        Returns:
+            Path to the generated graph file
+        """
+        try:
+            requests = api_data.get('requests', [])
+            
+            if not requests:
+                logger.warning("No API request data to plot")
+                return ""
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(requests)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp')
+            
+            # Create figure with subplots
+            fig = make_subplots(
+                rows=3, cols=1,
+                subplot_titles=('API Response Times Over Time', 'Response Code Distribution', 'Error Rate Timeline'),
+                vertical_spacing=0.12,
+                specs=[[{"secondary_y": False}],
+                       [{"type": "bar"}],
+                       [{"secondary_y": False}]]
+            )
+            
+            # Plot 1: Response times by service
+            for service in df['service'].unique():
+                service_data = df[df['service'] == service]
+                fig.add_trace(
+                    go.Scatter(
+                        x=service_data['timestamp'],
+                        y=service_data['response_time'],
+                        mode='markers',
+                        name=f'{service.capitalize()} API',
+                        marker=dict(
+                            size=6,
+                            color=service_data['status_code'],
+                            colorscale='RdYlGn_r',  # Red for high codes, green for low
+                            showscale=True,
+                            colorbar=dict(title="Status Code", x=1.15)
+                        ),
+                        hovertemplate='<b>%{text}</b><br>Time: %{y:.3f}s<br>Status: %{marker.color}<extra></extra>',
+                        text=[f"{row['method']} {row['endpoint']}" for _, row in service_data.iterrows()]
+                    ),
+                    row=1, col=1
+                )
+            
+            # Plot 2: Status code distribution
+            status_counts = df['status_code'].value_counts().sort_index()
+            colors = ['green' if code < 400 else 'orange' if code < 500 else 'red' for code in status_counts.index]
+            
+            fig.add_trace(
+                go.Bar(
+                    x=[f"HTTP {code}" for code in status_counts.index],
+                    y=status_counts.values,
+                    marker_color=colors,
+                    name='Status Codes',
+                    showlegend=False,
+                    hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+                ),
+                row=2, col=1
+            )
+            
+            # Plot 3: Error rate over time (sliding window)
+            # Group by time buckets (1-minute intervals)
+            df['time_bucket'] = df['timestamp'].dt.floor('1min')
+            error_rate = df.groupby('time_bucket').agg({
+                'is_error': ['sum', 'count']
+            })
+            error_rate.columns = ['errors', 'total']
+            error_rate['error_rate'] = (error_rate['errors'] / error_rate['total'] * 100).fillna(0)
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=error_rate.index,
+                    y=error_rate['error_rate'],
+                    mode='lines+markers',
+                    name='Error Rate',
+                    line=dict(color='red', width=2),
+                    fill='tozeroy',
+                    fillcolor='rgba(255, 0, 0, 0.1)',
+                    hovertemplate='<b>%{x}</b><br>Error Rate: %{y:.1f}%<extra></extra>'
+                ),
+                row=3, col=1
+            )
+            
+            # Update layout
+            fig.update_layout(
+                height=1000,
+                title_text="API Performance Analysis",
+                showlegend=True
+            )
+            
+            # Update axes
+            fig.update_xaxes(title_text="Time", row=1, col=1)
+            fig.update_yaxes(title_text="Response Time (seconds)", row=1, col=1)
+            
+            fig.update_xaxes(title_text="HTTP Status Code", row=2, col=1)
+            fig.update_yaxes(title_text="Request Count", row=2, col=1)
+            
+            fig.update_xaxes(title_text="Time", row=3, col=1)
+            fig.update_yaxes(title_text="Error Rate (%)", row=3, col=1)
+            
+            # Save graph
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            graph_file = os.path.join(self.results_dir, f"api_performance_{timestamp}.html")
+            fig.write_html(graph_file)
+            
+            # Also save as static image
+            if self.graph_format in ['png', 'svg', 'pdf']:
+                static_file = os.path.join(self.results_dir, f"api_performance_{timestamp}.{self.graph_format}")
+                fig.write_image(static_file)
+                logger.info(f"Generated static graph: {static_file}")
+            
+            logger.info(f"Generated API performance graph: {graph_file}")
+            return graph_file
+            
+        except Exception as e:
+            logger.error(f"Error generating API performance graph: {e}")
+            return ""
+    
+    def export_api_requests(self, api_data: dict) -> str:
+        """
+        Export API request data to CSV.
+        
+        Args:
+            api_data: Dictionary with API analysis results
+            
+        Returns:
+            Path to the CSV file
+        """
+        requests = api_data.get('requests', [])
+        
+        if not requests:
+            logger.debug("No API requests to export")
+            return ""
+        
+        try:
+            # Generate CSV filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_file = os.path.join(self.results_dir, f"api_requests_{timestamp}.csv")
+            
+            # Define headers
+            headers = ['timestamp', 'pod_name', 'service', 'method', 'endpoint', 'status_code', 'response_time', 'is_error']
+            
+            with open(csv_file, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                
+                for req in requests:
+                    writer.writerow({
+                        'timestamp': req['timestamp'].isoformat(),
+                        'pod_name': req['pod_name'],
+                        'service': req['service'],
+                        'method': req['method'],
+                        'endpoint': req['endpoint'],
+                        'status_code': req['status_code'],
+                        'response_time': req['response_time'],
+                        'is_error': req['is_error']
+                    })
+            
+            logger.info(f"Exported {len(requests)} API requests to {csv_file}")
+            return csv_file
+            
+        except Exception as e:
+            logger.error(f"Error exporting API requests: {e}")
+            return ""
+    
     def _parse_cpu_value(self, cpu_str: str) -> float:
         """Parse CPU value from string (e.g., '100m' -> 100)."""
         try:
@@ -673,8 +848,8 @@ class CSVExporter:
             
             for html_file in all_html_in_results:
                 basename = os.path.basename(html_file)
-                # Only include graph files (pod_metrics, test_results, test_execution)
-                if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_']):
+                # Only include graph files (pod_metrics, test_results, test_execution, api_performance)
+                if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_', 'api_performance_']):
                     if basename not in html_files:  # Avoid duplicates
                         dest = os.path.join(src_dir, basename)
                         shutil.copy2(html_file, dest)
@@ -702,6 +877,12 @@ class CSVExporter:
                     dest = os.path.join(src_dir, os.path.basename(csv_file))
                     shutil.copy2(csv_file, dest)
                     csv_files.append(os.path.basename(csv_file))
+            
+            # Also copy API requests CSV if it exists
+            for api_csv in glob.glob(os.path.join(self.results_dir, "api_requests_*.csv")):
+                dest = os.path.join(src_dir, os.path.basename(api_csv))
+                shutil.copy2(api_csv, dest)
+                csv_files.append(os.path.basename(api_csv))
             
             # Generate index.html at web_report root
             index_path = os.path.join(web_dir, "index.html")
@@ -977,6 +1158,9 @@ class CSVExporter:
                 elif "test_execution" in html_file:
                     title = "Test Execution Times"
                     desc = "Analyze individual test performance and timing"
+                elif "api_performance" in html_file:
+                    title = "API Performance Analysis"
+                    desc = "Response times, status codes, and error rates for API requests"
                 else:
                     title = html_file.replace('.html', '').replace('_', ' ').title()
                     desc = "Interactive visualization"
@@ -1014,6 +1198,9 @@ class CSVExporter:
                 elif "execution_times" in csv_file:
                     title = "Test Execution Times"
                     desc = "Duration and status for every individual test"
+                elif "api_requests" in csv_file:
+                    title = "API Requests Data"
+                    desc = "All API requests with timestamps, response codes, and timing"
                 else:
                     title = csv_file.replace('.csv', '').replace('_', ' ').title()
                     desc = "Raw data export"

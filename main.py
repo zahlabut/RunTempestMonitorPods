@@ -25,6 +25,7 @@ from typing import List, Dict, Tuple
 from pod_monitor import PodMonitor
 from cr_handler import CRHandler
 from csv_exporter import CSVExporter
+from api_monitor import APIMonitor
 
 
 # Global flag for graceful shutdown
@@ -415,6 +416,33 @@ def main():
                 logger.info(f"Deleting active CR: {cr_name}")
                 cr_handler.delete_cr(cr_name)
         
+        # Analyze API performance
+        api_data = {}
+        api_graph_file = ""
+        api_csv_file = ""
+        logger.info("\nAnalyzing API pod logs...")
+        try:
+            api_monitor = APIMonitor(namespace=config['namespace'])
+            api_data = api_monitor.analyze_all_api_pods()
+            
+            if api_data.get('total_requests', 0) > 0:
+                # Export API requests to CSV
+                api_csv_file = csv_exporter.export_api_requests(api_data)
+                
+                # Generate API performance graph
+                if config['output']['enable_graphs']:
+                    api_graph_file = csv_exporter.generate_api_performance_graph(api_data)
+                
+                logger.info(f"API Analysis Summary:")
+                logger.info(f"  Total Requests: {api_data['total_requests']}")
+                logger.info(f"  Error Requests: {api_data['error_requests']}")
+                logger.info(f"  Success Rate: {api_data['success_rate']:.2f}%")
+                logger.info(f"  Avg Response Time: {api_data['avg_response_time']:.3f}s")
+            else:
+                logger.warning("No API requests found in logs")
+        except Exception as e:
+            logger.error(f"Error analyzing API logs: {e}")
+        
         # Generate graphs and track for web report
         graph_files = []
         
@@ -422,6 +450,11 @@ def main():
             logger.info("Generating graphs...")
             try:
                 graph_files = csv_exporter.generate_graphs()
+                
+                # Add API graph if available
+                if api_graph_file:
+                    graph_files.append(api_graph_file)
+                
                 if graph_files:
                     for graph_file in graph_files:
                         logger.info(f"Generated graph: {graph_file}")
@@ -475,6 +508,8 @@ def main():
             logger.info(f"Failed Tests CSV: {csv_exporter.failed_tests_csv}")
         if os.path.exists(csv_exporter.test_execution_csv):
             logger.info(f"Test Execution Times CSV: {csv_exporter.test_execution_csv}")
+        if api_csv_file and os.path.exists(api_csv_file):
+            logger.info(f"API Requests CSV: {api_csv_file}")
         
         # Show web report location
         if 'web_report_dir' in locals() and web_report_dir:

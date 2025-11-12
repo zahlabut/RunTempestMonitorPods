@@ -16,6 +16,10 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 - ✅ **Robust Test Counting**: Accurate test counts even if execution is interrupted (Ctrl+C)
   - Counts individual test results from log lines
   - Works regardless of whether tests completed or were stopped mid-run
+- 🔌 **API Performance Monitoring**: Analyze OpenStack API pod logs (end-of-run)
+  - Auto-detects API pods (octavia-api, designate-api, neutron-api, etc.)
+  - Tracks response times, status codes, and error rates
+  - Generates detailed performance graphs and CSV exports
 - 🛡️ **Failure Handling**: Log failures without interrupting the test process
 - ⏰ **Configurable Duration**: Set test run duration in hours
 - 🎯 **Pod Pattern Matching**: Monitor specific pods using wildcard patterns
@@ -227,19 +231,24 @@ results/
 ├── tempest_monitoring_results_20250105_143022.csv
 ├── tempest_monitoring_failed_tests_20250105_143022.csv
 ├── tempest_monitoring_test_execution_times_20250105_143022.csv
+├── api_requests_20250105_143022.csv                     # API performance data
 ├── pod_metrics_20250105_153045.html
 ├── pod_metrics_20250105_153045.png
 ├── test_results_20250105_153045.html
 ├── test_execution_times_20250105_153045.html
 ├── test_execution_times_20250105_153045.png
 ├── test_results_20250105_153045.png
+├── api_performance_20250105_153045.html                 # API performance graphs
+├── api_performance_20250105_153045.png
 ├── web_report/                                          # 🌐 HTTP server-ready
 │   ├── index.html                                      # Landing page (at root)
 │   └── src/                                            # All supporting files
 │       ├── pod_metrics_20250105_153045.html            # Interactive graphs
 │       ├── test_results_20250105_153045.html
 │       ├── test_execution_times_20250105_153045.html
+│       ├── api_performance_20250105_153045.html        # API performance
 │       ├── tempest_monitoring_*.csv                    # All CSV data
+│       ├── api_requests_*.csv                          # API request data
 │       └── *.png, *.svg, *.pdf                        # All static images
 ├── results_archive_20250105_143022.zip                 # 📦 Contains only web_report/
 └── old_results_archive_20250105_140000.zip             # Previous run archive
@@ -337,6 +346,39 @@ This CSV enables powerful analysis:
 - Track test timing trends over multiple runs
 - Correlate timing with pass/fail status
 
+#### API Requests CSV (`api_requests_*.csv`)
+
+Contains all API requests captured from OpenStack API pod logs (octavia-api, designate-api, neutron-api, etc.):
+
+| Column | Description |
+|--------|-------------|
+| `timestamp` | When the API request was made |
+| `pod_name` | Name of the API pod |
+| `service` | OpenStack service (octavia, designate, neutron, etc.) |
+| `method` | HTTP method (GET, POST, PUT, DELETE, PATCH) |
+| `endpoint` | API endpoint path |
+| `status_code` | HTTP response code (200, 404, 500, etc.) |
+| `response_time` | Response time in seconds |
+| `is_error` | True if status code >= 400 |
+
+**Example:**
+```csv
+timestamp,pod_name,service,method,endpoint,status_code,response_time,is_error
+2025-11-12T15:30:45.123456,octavia-api-xyz,octavia,GET,/v2/lbaas/loadbalancers,200,0.123,False
+2025-11-12T15:30:46.789012,octavia-api-xyz,octavia,POST,/v2/lbaas/loadbalancers,201,1.456,False
+2025-11-12T15:30:48.345678,designate-api-abc,designate,GET,/v2/zones,200,0.089,False
+2025-11-12T15:30:50.901234,neutron-api-def,neutron,POST,/v2.0/ports,500,2.345,True
+```
+
+This CSV enables API performance analysis:
+- Track response times across different API services
+- Identify slow API endpoints
+- Detect error patterns and failure rates
+- Monitor API health during test execution
+- Correlate API performance with test results
+
+**Note**: API log analysis runs automatically at the end of test execution (including when interrupted with Ctrl+C).
+
 ### Graphs
 
 The tool generates interactive HTML graphs and static images for visualization.
@@ -409,6 +451,37 @@ The graph visualizes:
 - ⚡ **Fast failures**: Tests that fail quickly may indicate setup/configuration issues
 - 🔄 **Timing consistency**: Stable execution times indicate reliable test environment
 
+#### API Performance Graph
+
+Interactive HTML graph showing comprehensive API performance analysis with three subplots:
+
+**1. API Response Times Over Time**
+- Scatter plot showing response time for each API request
+- Color-coded by HTTP status code (green for 2xx, yellow for 3xx, orange for 4xx, red for 5xx)
+- Grouped by service (Octavia, Designate, Neutron, etc.)
+- Hover tooltips showing full endpoint details
+
+**2. Response Code Distribution**
+- Bar chart showing count of each HTTP status code
+- Color-coded: green (< 400), orange (400-499), red (>= 500)
+- Quick overview of API health
+
+**3. Error Rate Timeline**
+- Line chart showing error rate percentage over time (1-minute buckets)
+- Helps identify spikes in API errors during test execution
+
+**Example**: Generated as `api_performance_YYYYMMDD_HHMMSS.html`
+
+**What to look for in the graph:**
+- 🚀 **Fast APIs**: Response times under 1 second indicate healthy performance
+- 🐌 **Slow endpoints**: Requests taking > 5 seconds may need optimization
+- ⚠️ **Error spikes**: Sudden increases in error rate during specific test phases
+- 🔴 **5xx errors**: Server-side issues requiring immediate attention
+- 🟠 **4xx errors**: Client errors that may indicate test configuration issues
+- 📊 **Service comparison**: Compare response times across different API services
+
+**Note**: API log analysis runs automatically at the end of each test run. It auto-detects all API pods in the namespace and parses their logs for request/response data.
+
 All graphs are also exported as static images (PNG/SVG/PDF).
 
 ### Web Report (HTTP Server Ready)
@@ -423,8 +496,10 @@ results/web_report/
     ├── pod_metrics_*.html                           # Interactive graphs
     ├── test_results_*.html
     ├── test_execution_times_*.html
+    ├── api_performance_*.html                       # API performance analysis
     ├── tempest_monitoring_metrics_*.csv             # CSV data files
     ├── tempest_monitoring_results_*.csv
+    ├── api_requests_*.csv                           # API request data
     ├── tempest_monitoring_failed_tests_*.csv
     ├── tempest_monitoring_test_execution_times_*.csv
     ├── pod_metrics_*.png                            # Static images
