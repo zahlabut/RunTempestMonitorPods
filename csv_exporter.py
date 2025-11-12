@@ -284,6 +284,14 @@ class CSVExporter:
             # Convert timestamp to datetime
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             
+            # Convert test count columns to numeric (handle any non-numeric values)
+            df['tests_passed'] = pd.to_numeric(df['tests_passed'], errors='coerce').fillna(0)
+            df['tests_failed'] = pd.to_numeric(df['tests_failed'], errors='coerce').fillna(0)
+            df['tests_skipped'] = pd.to_numeric(df['tests_skipped'], errors='coerce').fillna(0)
+            
+            # Log test count data for debugging
+            logger.debug(f"Test counts - Passed: {df['tests_passed'].sum()}, Failed: {df['tests_failed'].sum()}, Skipped: {df['tests_skipped'].sum()}")
+            
             # Create figure with subplots
             fig = make_subplots(
                 rows=2, cols=1,

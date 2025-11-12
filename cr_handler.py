@@ -429,6 +429,63 @@ class CRHandler:
         logger.error(msg)
         return False, msg
     
+    def _extract_test_counts_from_logs(self, cr_name: str) -> Dict:
+        """
+        Extract test counts from pod logs.
+        
+        Args:
+            cr_name: Name of the CR
+            
+        Returns:
+            Dictionary with test counts or None if not found
+        """
+        try:
+            # Get pods associated with this CR
+            cmd = ["oc", "get", "pods", "-n", self.namespace, "-o", "json"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            pods_data = json.loads(result.stdout)
+            
+            # Find pod associated with this CR
+            for pod in pods_data.get("items", []):
+                pod_name = pod["metadata"]["name"]
+                
+                if cr_name in pod_name:
+                    # Get logs
+                    log_cmd = ["oc", "logs", pod_name, "-n", self.namespace]
+                    log_result = subprocess.run(log_cmd, capture_output=True, text=True, check=False)
+                    
+                    if log_result.returncode == 0:
+                        logs = log_result.stdout
+                        
+                        # Parse test counts from logs
+                        # Format: 
+                        # Ran: 6 tests in 327.7494 sec.
+                        #  - Passed: 5
+                        #  - Skipped: 0
+                        #  - Failed: 1
+                        
+                        passed_match = re.search(r'- Passed:\s+(\d+)', logs)
+                        failed_match = re.search(r'- Failed:\s+(\d+)', logs)
+                        skipped_match = re.search(r'- Skipped:\s+(\d+)', logs)
+                        
+                        if passed_match or failed_match or skipped_match:
+                            counts = {
+                                "passed": int(passed_match.group(1)) if passed_match else 0,
+                                "failed": int(failed_match.group(1)) if failed_match else 0,
+                                "skipped": int(skipped_match.group(1)) if skipped_match else 0
+                            }
+                            logger.debug(f"Extracted test counts from pod logs for {cr_name}: {counts}")
+                            return counts
+                    
+                    # Only check the first matching pod
+                    break
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error extracting test counts from logs for {cr_name}: {e}")
+            return None
+    
     def check_test_results(self, cr_name: str) -> Dict:
         """
         Check the test results from a completed CR.
@@ -444,16 +501,31 @@ class CRHandler:
         # Try to extract test results from status
         raw_status = status.get("raw_status", {})
         
+        # First try to get from CR status
+        tests_passed = raw_status.get("testsPassed", 0)
+        tests_failed = raw_status.get("testsFailed", 0)
+        tests_skipped = raw_status.get("testsSkipped", 0)
+        
+        # If not found, try to extract from pod logs
+        if tests_passed == 0 and tests_failed == 0 and tests_skipped == 0:
+            test_counts = self._extract_test_counts_from_logs(cr_name)
+            if test_counts:
+                tests_passed = test_counts.get("passed", 0)
+                tests_failed = test_counts.get("failed", 0)
+                tests_skipped = test_counts.get("skipped", 0)
+        
         results = {
             "cr_name": cr_name,
             "passed": status["succeeded"],
             "phase": status["phase"],
             "message": status["message"],
-            "tests_passed": raw_status.get("testsPassed", 0),
-            "tests_failed": raw_status.get("testsFailed", 0),
-            "tests_skipped": raw_status.get("testsSkipped", 0),
+            "tests_passed": tests_passed,
+            "tests_failed": tests_failed,
+            "tests_skipped": tests_skipped,
             "timestamp": datetime.now().isoformat()
         }
+        
+        logger.debug(f"Test results for {cr_name}: Passed={tests_passed}, Failed={tests_failed}, Skipped={tests_skipped}")
         
         return results
     
