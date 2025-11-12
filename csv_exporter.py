@@ -599,17 +599,9 @@ class CSVExporter:
         from datetime import datetime
         
         try:
-            # Create web report directory
+            # Create web report directory (flat structure - all files in one place)
             web_dir = os.path.join(self.results_dir, "web_report")
             os.makedirs(web_dir, exist_ok=True)
-            
-            # Create subdirectories
-            graphs_dir = os.path.join(web_dir, "graphs")
-            csv_dir = os.path.join(web_dir, "csv")
-            images_dir = os.path.join(web_dir, "images")
-            os.makedirs(graphs_dir, exist_ok=True)
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(images_dir, exist_ok=True)
             
             # Copy HTML graph files
             html_files = []
@@ -619,7 +611,7 @@ class CSVExporter:
                 if graph_file and os.path.exists(graph_file) and graph_file.endswith('.html'):
                     basename = os.path.basename(graph_file)
                     if basename not in html_files:  # Avoid duplicates
-                        dest = os.path.join(graphs_dir, basename)
+                        dest = os.path.join(web_dir, basename)
                         shutil.copy2(graph_file, dest)
                         html_files.append(basename)
             
@@ -632,13 +624,13 @@ class CSVExporter:
                 # Only include graph files (pod_metrics, test_results, test_execution)
                 if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_']):
                     if basename not in html_files:  # Avoid duplicates
-                        dest = os.path.join(graphs_dir, basename)
+                        dest = os.path.join(web_dir, basename)
                         shutil.copy2(html_file, dest)
                         html_files.append(basename)
                         logger.debug(f"Added {basename} to web report")
             
             if html_files:
-                logger.info(f"Copied {len(html_files)} HTML graph files to web_report/graphs/")
+                logger.info(f"Copied {len(html_files)} HTML graph files to web_report/")
                 logger.debug(f"HTML files in web report: {html_files}")
             else:
                 logger.warning("No HTML graph files found to include in web report")
@@ -647,7 +639,7 @@ class CSVExporter:
             image_files = []
             for ext in ['png', 'svg', 'pdf']:
                 for img_file in glob.glob(os.path.join(self.results_dir, f"*.{ext}")):
-                    dest = os.path.join(images_dir, os.path.basename(img_file))
+                    dest = os.path.join(web_dir, os.path.basename(img_file))
                     shutil.copy2(img_file, dest)
                     image_files.append(os.path.basename(img_file))
             
@@ -655,7 +647,7 @@ class CSVExporter:
             csv_files = []
             for csv_file in [self.metrics_csv, self.results_csv, self.failed_tests_csv, self.test_execution_csv]:
                 if os.path.exists(csv_file):
-                    dest = os.path.join(csv_dir, os.path.basename(csv_file))
+                    dest = os.path.join(web_dir, os.path.basename(csv_file))
                     shutil.copy2(csv_file, dest)
                     csv_files.append(os.path.basename(csv_file))
             
@@ -930,7 +922,7 @@ class CSVExporter:
                 <div class="card">
                     <h3 class="graph-icon">{title}</h3>
                     <p style="color: #666; margin-bottom: 15px;">{desc}</p>
-                    <a href="graphs/{html_file}" target="_blank">Open Graph →</a>
+                    <a href="{html_file}" target="_blank">Open Graph →</a>
                 </div>
 """
             html_content += """
@@ -967,7 +959,7 @@ class CSVExporter:
                 <div class="card">
                     <h3 class="csv-icon">{title}</h3>
                     <p style="color: #666; margin-bottom: 15px;">{desc}</p>
-                    <a href="csv/{csv_file}" download>Download CSV →</a>
+                    <a href="{csv_file}" download>Download CSV →</a>
                 </div>
 """
             html_content += """
@@ -989,8 +981,8 @@ class CSVExporter:
                     html_content += f"""
                 <div class="card">
                     <h3 class="image-icon">{title}</h3>
-                    <a href="images/{image_file}" download>Download →</a>
-                    <img src="images/{image_file}" alt="{title}" class="image-preview">
+                    <a href="{image_file}" download>Download →</a>
+                    <img src="{image_file}" alt="{title}" class="image-preview">
                 </div>
 """
                 else:
@@ -998,7 +990,7 @@ class CSVExporter:
                     html_content += f"""
                 <div class="card">
                     <h3 class="image-icon">{title}</h3>
-                    <a href="images/{image_file}" download>Download {os.path.splitext(image_file)[1].upper()} →</a>
+                    <a href="{image_file}" download>Download {os.path.splitext(image_file)[1].upper()} →</a>
                 </div>
 """
             html_content += """

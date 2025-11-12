@@ -194,11 +194,11 @@ results/
 ├── test_execution_times_20250105_153045.html
 ├── test_execution_times_20250105_153045.png
 ├── test_results_20250105_153045.png
-├── web_report/                                   # HTTP server-ready report
-│   ├── index.html                               # Main landing page
-│   ├── graphs/                                  # Interactive HTML graphs
-│   ├── csv/                                     # CSV data files
-│   └── images/                                  # Static images
+├── web_report/                                   # HTTP server-ready report (all files in one directory)
+│   ├── index.html                               # Main landing page with links
+│   ├── *.html                                   # All interactive graphs
+│   ├── *.csv                                    # All CSV data files
+│   └── *.png, *.svg, *.pdf                     # All static images
 ├── results_archive_20250105_143022.zip          # All current results
 └── old_results_archive_20250105_140000.zip      # Previous run (if any)
 ```
@@ -370,21 +370,20 @@ The tool automatically generates a **web-ready report** in `results/web_report/`
 #### Directory Structure
 ```
 results/web_report/
-├── index.html              # Main landing page
-├── graphs/                 # Interactive HTML graphs
-│   ├── pod_metrics_*.html
-│   ├── test_results_*.html
-│   └── test_execution_times_*.html
-├── csv/                    # All CSV data files
-│   ├── tempest_monitoring_metrics_*.csv
-│   ├── tempest_monitoring_results_*.csv
-│   ├── tempest_monitoring_failed_tests_*.csv
-│   └── tempest_monitoring_test_execution_times_*.csv
-└── images/                 # Static images (PNG, SVG, PDF)
-    ├── pod_metrics_*.png
-    ├── test_results_*.png
-    └── test_execution_times_*.png
+├── index.html                                        # Main landing page
+├── pod_metrics_*.html                                # Interactive CPU/Memory graph
+├── test_results_*.html                               # Interactive test results graph
+├── test_execution_times_*.html                       # Interactive timing graph
+├── tempest_monitoring_metrics_*.csv                  # Pod metrics data
+├── tempest_monitoring_results_*.csv                  # Test results data
+├── tempest_monitoring_failed_tests_*.csv            # Failed tests data
+├── tempest_monitoring_test_execution_times_*.csv    # Test timing data
+├── pod_metrics_*.png                                # Static images
+├── test_results_*.png
+└── test_execution_times_*.png
 ```
+
+**All files in one place!** Simple, clean, and easy to access.
 
 #### Features of the Web Report
 
@@ -439,8 +438,9 @@ results/web_report/
 ✅ **Professional Presentation**: Impress stakeholders with a polished report  
 ✅ **Easy Sharing**: Just upload and share a URL  
 ✅ **No Dependencies**: Pure HTML/CSS, works on any web server  
-✅ **Self-Contained**: All files organized and ready to deploy  
+✅ **Self-Contained**: All files in one directory, no complex folder structure  
 ✅ **Interactive**: Team members can explore graphs and download data  
+✅ **Simple Structure**: Everything in one place - graphs, CSVs, and images together  
 
 ### Downloading Result Files
 
