@@ -170,12 +170,13 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 
 - 📦 **On Startup**: Any existing result files are archived to `old_results_archive_{timestamp}.zip` and removed from the directory
 - 📦 **On Completion**: All current results are packaged into `results_archive_{timestamp}.zip`
+  - Includes: CSV files, HTML graphs, PNG/SVG/PDF images, and complete `web_report/` directory
 - 🧹 **Clean Workspace**: Each run starts with a clean results directory
 
 This ensures you always have:
 - Clean, organized results for the current run
 - Archived history from previous runs
-- Easy download via a single ZIP file
+- Easy download via a single ZIP file (includes HTTP-ready web report)
 
 ### Directory Structure
 
@@ -458,7 +459,7 @@ ssh root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 \"base64 /path/t
 
 Note: Using base64 encoding to safely transfer binary ZIP file
 
-Archive contains: CSV files, HTML graphs, and PNG images
+Archive contains: CSV files, HTML graphs, PNG images, and complete web_report directory
 Archive size: 2.85 MB
 Archive location: /path/to/results_archive_20251106_143022.zip
 ============================================================
@@ -468,6 +469,20 @@ Archive location: /path/to/results_archive_20251106_143022.zip
 - ✅ Single command to download everything
 - ✅ Base64 encoding prevents file corruption
 - ✅ All results (CSV, HTML, PNG) in one ZIP
+- ✅ Includes complete `web_report/` directory ready for HTTP server upload
+
+**After extracting the ZIP:**
+```bash
+# Extract the archive
+unzip results_archive_20251106_143022.zip
+
+# You'll have:
+# - Individual CSV and HTML files
+# - web_report/ directory (ready to upload to web server)
+
+# Upload web report to HTTP server
+scp -r web_report/ user@webserver:/var/www/html/tempest-results/
+```
 - ✅ Colored output for easy visibility
 
 Simply copy and execute the command, then extract: `unzip results_archive_*.zip`
