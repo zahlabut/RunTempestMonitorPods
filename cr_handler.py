@@ -11,7 +11,7 @@ import subprocess
 import json
 import time
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import threading
 import yaml
 
