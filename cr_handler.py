@@ -500,15 +500,19 @@ class CRHandler:
         logger.error(msg)
         return False, msg
     
-    def _extract_test_counts_from_logs(self, cr_name: str) -> Dict:
+    def _extract_test_counts_from_logs(self, cr_name: str) -> Optional[Dict]:
         """
-        Extract test counts from pod logs.
+        Extract test counts from pod logs using multiple methods.
+        
+        This method is robust and works even if tests are interrupted (Ctrl+C):
+        1. Counts individual test results from log lines (primary method)
+        2. Falls back to "Totals" section if available (for validation)
         
         Args:
             cr_name: Name of the CR
             
         Returns:
-            Dictionary with test counts or None if not found
+            Dictionary with test counts {"passed": N, "failed": N, "skipped": N} or None if not found
         """
         try:
             # Get pods associated with this CR
@@ -528,25 +532,37 @@ class CRHandler:
                     if log_result.returncode == 0:
                         logs = log_result.stdout
                         
-                        # Parse test counts from logs
-                        # Format: 
-                        # Ran: 6 tests in 327.7494 sec.
-                        #  - Passed: 5
-                        #  - Skipped: 0
-                        #  - Failed: 1
+                        # Method 1: Count individual test results from log lines
+                        # This works even if the test was interrupted (Ctrl+C) before completion
+                        # Format: {N} test.name [time] ... STATUS
+                        passed_count = len(re.findall(r'\{(\d+)\}.*\[[\d.]+s\]\s+\.\.\.\s+(ok|PASSED)', logs, re.IGNORECASE))
+                        failed_count = len(re.findall(r'\{(\d+)\}.*\[[\d.]+s\]\s+\.\.\.\s+FAILED', logs))
+                        skipped_count = len(re.findall(r'\{(\d+)\}.*\[[\d.]+s\]\s+\.\.\.\s+(SKIPPED|skipped)', logs, re.IGNORECASE))
                         
+                        # Method 2: Try to get counts from "Totals" section (if test completed)
                         passed_match = re.search(r'- Passed:\s+(\d+)', logs)
                         failed_match = re.search(r'- Failed:\s+(\d+)', logs)
                         skipped_match = re.search(r'- Skipped:\s+(\d+)', logs)
                         
+                        # Prefer Totals section if available, otherwise use counted results
                         if passed_match or failed_match or skipped_match:
                             counts = {
                                 "passed": int(passed_match.group(1)) if passed_match else 0,
                                 "failed": int(failed_match.group(1)) if failed_match else 0,
                                 "skipped": int(skipped_match.group(1)) if skipped_match else 0
                             }
-                            logger.debug(f"Extracted test counts from pod logs for {cr_name}: {counts}")
-                            return counts
+                            logger.debug(f"Extracted test counts from 'Totals' section for {cr_name}: {counts}")
+                        elif passed_count > 0 or failed_count > 0 or skipped_count > 0:
+                            counts = {
+                                "passed": passed_count,
+                                "failed": failed_count,
+                                "skipped": skipped_count
+                            }
+                            logger.info(f"Extracted test counts from individual log lines for {cr_name}: {counts} (test may have been interrupted)")
+                        else:
+                            return None
+                        
+                        return counts
                     
                     # Only check the first matching pod
                     break
@@ -577,13 +593,14 @@ class CRHandler:
         tests_failed = raw_status.get("testsFailed", 0)
         tests_skipped = raw_status.get("testsSkipped", 0)
         
-        # If not found, try to extract from pod logs
-        if tests_passed == 0 and tests_failed == 0 and tests_skipped == 0:
-            test_counts = self._extract_test_counts_from_logs(cr_name)
-            if test_counts:
-                tests_passed = test_counts.get("passed", 0)
-                tests_failed = test_counts.get("failed", 0)
-                tests_skipped = test_counts.get("skipped", 0)
+        # Always try to extract from pod logs as well (more reliable, works even if interrupted)
+        # This will count individual test result lines and use Totals as confirmation
+        test_counts = self._extract_test_counts_from_logs(cr_name)
+        if test_counts:
+            # Prefer log counts as they're more accurate
+            tests_passed = test_counts.get("passed", tests_passed)
+            tests_failed = test_counts.get("failed", tests_failed)
+            tests_skipped = test_counts.get("skipped", tests_skipped)
         
         results = {
             "cr_name": cr_name,

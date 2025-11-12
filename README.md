@@ -13,7 +13,9 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 - 🔍 **Failed Test Tracking**: Automatically extract and track failed tests from pod logs
 - ⏱️ **Test Execution Timing**: Track and visualize execution time for each individual test
 - 🌐 **Web Report**: Auto-generate a beautiful HTML report ready for HTTP server hosting
-- ✅ **Test Verification**: Automatically verify test results (PASS/FAIL)
+- ✅ **Robust Test Counting**: Accurate test counts even if execution is interrupted (Ctrl+C)
+  - Counts individual test results from log lines
+  - Works regardless of whether tests completed or were stopped mid-run
 - 🛡️ **Failure Handling**: Log failures without interrupting the test process
 - ⏰ **Configurable Duration**: Set test run duration in hours
 - 🎯 **Pod Pattern Matching**: Monitor specific pods using wildcard patterns
@@ -510,6 +512,44 @@ scp -r web_report/ user@webserver:/var/www/html/tempest-results/
 - ✅ Colored output for easy visibility
 
 Simply copy and execute the command, then extract: `unzip results_archive_*.zip`
+
+## Key Features Explained
+
+### Robust Test Counting
+
+The tool uses a **dual-method approach** to count test results, ensuring accurate counts even when tests are interrupted:
+
+**Method 1: Individual Log Line Counting (Primary)**
+- Parses each test result line in pod logs
+- Format: `{N} test.name [time] ... STATUS`
+- Counts: `ok/PASSED`, `FAILED`, `SKIPPED`
+- **Works even if test run is interrupted with Ctrl+C**
+
+**Method 2: Totals Section (Validation)**
+- Uses the "Totals" section if the test completed fully
+- Format:
+  ```
+  ======
+  Totals
+  ======
+  Ran: 4 tests in 56.9512 sec.
+   - Passed: 0
+   - Skipped: 0
+   - Failed: 4
+  ```
+
+**Why This Matters:**
+- ✅ Accurate counts even if you stop execution mid-run
+- ✅ No lost data from partial test runs
+- ✅ Graphs and CSVs always show the tests that actually ran
+- ✅ Both methods provide cross-validation when tests complete
+
+**Example Scenario:**
+```bash
+# You press Ctrl+C after 10 tests have run out of 20
+# Traditional method: Shows 0 tests (no Totals section yet)
+# Our method: Shows accurate count of 10 tests that actually executed
+```
 
 ## Architecture
 
