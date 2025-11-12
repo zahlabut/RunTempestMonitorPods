@@ -433,10 +433,18 @@ def main():
         # Generate web report
         logger.info("Generating web report...")
         try:
+            # Calculate test-level statistics (not CR-level)
+            total_tests_passed = sum(r.get('tests_passed', 0) for r in all_results)
+            total_tests_failed = sum(r.get('tests_failed', 0) for r in all_results)
+            total_tests_skipped = sum(r.get('tests_skipped', 0) for r in all_results)
+            total_tests = total_tests_passed + total_tests_failed + total_tests_skipped
+            
             test_summary = {
-                'total_runs': len(all_results),
-                'passed': sum(1 for r in all_results if r.get('passed', False)),
-                'failed': sum(1 for r in all_results if not r.get('passed', True))
+                'total_runs': len(all_results),  # Number of CR executions
+                'total_tests': total_tests,  # Total individual tests
+                'tests_passed': total_tests_passed,
+                'tests_failed': total_tests_failed,
+                'tests_skipped': total_tests_skipped
             }
             web_report_dir = csv_exporter.generate_web_report(test_summary, graph_files)
             if web_report_dir:

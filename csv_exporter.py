@@ -720,11 +720,13 @@ class CSVExporter:
         """Generate the main index.html file."""
         from datetime import datetime
         
-        # Get statistics
+        # Get statistics (test-level, not CR-level)
         total_runs = test_summary.get('total_runs', 0)
-        passed = test_summary.get('passed', 0)
-        failed = test_summary.get('failed', 0)
-        success_rate = (passed / total_runs * 100) if total_runs > 0 else 0
+        total_tests = test_summary.get('total_tests', 0)
+        tests_passed = test_summary.get('tests_passed', 0)
+        tests_failed = test_summary.get('tests_failed', 0)
+        tests_skipped = test_summary.get('tests_skipped', 0)
+        success_rate = (tests_passed / total_tests * 100) if total_tests > 0 else 0
         
         # Generate HTML content
         html_content = f"""<!DOCTYPE html>
@@ -930,20 +932,29 @@ class CSVExporter:
         
         <section class="summary">
             <div class="stat-card info">
-                <div class="stat-value">{total_runs}</div>
-                <div class="stat-label">Total Test Runs</div>
+                <div class="stat-value">{total_tests}</div>
+                <div class="stat-label">Total Tests Executed</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">{total_runs} CR run(s)</div>
             </div>
             <div class="stat-card success">
-                <div class="stat-value">{passed}</div>
-                <div class="stat-label">Passed</div>
+                <div class="stat-value">{tests_passed}</div>
+                <div class="stat-label">Tests Passed</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Individual test successes</div>
             </div>
             <div class="stat-card danger">
-                <div class="stat-value">{failed}</div>
-                <div class="stat-label">Failed</div>
+                <div class="stat-value">{tests_failed}</div>
+                <div class="stat-label">Tests Failed</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Requiring investigation</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <div class="stat-value">{tests_skipped}</div>
+                <div class="stat-label">Tests Skipped</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Not executed</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{success_rate:.1f}%</div>
                 <div class="stat-label">Success Rate</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Passed / Total tests</div>
             </div>
         </section>
 """
