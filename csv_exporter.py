@@ -339,44 +339,71 @@ class CSVExporter:
             # Log test count data for debugging
             logger.debug(f"Test counts - Passed: {df['tests_passed'].sum()}, Failed: {df['tests_failed'].sum()}, Skipped: {df['tests_skipped'].sum()}")
             
-            # Create figure with single plot showing test counts
-            # (removed confusing binary pass/fail subplot)
+            # Create figure with stacked bars for better readability with multiple iterations
             fig = go.Figure()
             
-            # Add test counts as grouped bars with CR names
-            for cr_name in df['cr_name'].unique():
-                cr_data = df[df['cr_name'] == cr_name]
-                
-                # Create x-axis labels with CR name and timestamp
-                x_labels = [f"{cr_name}<br>{ts.strftime('%H:%M:%S')}" for ts in cr_data['timestamp']]
-                
-                fig.add_trace(
-                    go.Bar(x=x_labels, y=cr_data['tests_passed'], 
-                           name=f'{cr_name} - Passed',
-                           marker_color='green',
-                           hovertemplate='<b>%{x}</b><br>Passed: %{y}<extra></extra>')
-                )
-                fig.add_trace(
-                    go.Bar(x=x_labels, y=cr_data['tests_failed'], 
-                           name=f'{cr_name} - Failed',
-                           marker_color='red',
-                           hovertemplate='<b>%{x}</b><br>Failed: %{y}<extra></extra>')
-                )
-                fig.add_trace(
-                    go.Bar(x=x_labels, y=cr_data['tests_skipped'], 
-                           name=f'{cr_name} - Skipped',
-                           marker_color='orange',
-                           hovertemplate='<b>%{x}</b><br>Skipped: %{y}<extra></extra>')
-                )
+            # Sort by timestamp to show chronological order
+            df = df.sort_values('timestamp')
+            
+            # Create a combined label showing iteration order
+            # If multiple CRs, include CR name; if single CR, just show iteration
+            if len(df['cr_name'].unique()) > 1:
+                # Multiple CRs: show CR name + iteration number
+                x_labels = []
+                for cr_name in df['cr_name'].unique():
+                    cr_mask = df['cr_name'] == cr_name
+                    iteration_count = 1
+                    for idx in df[cr_mask].index:
+                        x_labels.append(f"{cr_name}<br>Run #{iteration_count}<br>{df.loc[idx, 'timestamp'].strftime('%H:%M')}")
+                        iteration_count += 1
+                # Re-create x_labels in df order
+                x_labels = []
+                cr_iteration_counters = {}
+                for idx, row in df.iterrows():
+                    cr_name = row['cr_name']
+                    if cr_name not in cr_iteration_counters:
+                        cr_iteration_counters[cr_name] = 0
+                    cr_iteration_counters[cr_name] += 1
+                    x_labels.append(f"{cr_name}<br>Run #{cr_iteration_counters[cr_name]}<br>{row['timestamp'].strftime('%H:%M')}")
+            else:
+                # Single CR: just show iteration numbers
+                x_labels = [f"Run #{i+1}<br>{ts.strftime('%H:%M:%S')}" 
+                           for i, ts in enumerate(df['timestamp'])]
+            
+            # Add stacked bars for better visualization with many iterations
+            fig.add_trace(
+                go.Bar(x=x_labels, y=df['tests_passed'], 
+                       name='Passed',
+                       marker_color='green',
+                       text=df['tests_passed'],
+                       textposition='inside',
+                       hovertemplate='<b>%{x}</b><br>Passed: %{y}<extra></extra>')
+            )
+            fig.add_trace(
+                go.Bar(x=x_labels, y=df['tests_failed'], 
+                       name='Failed',
+                       marker_color='red',
+                       text=df['tests_failed'],
+                       textposition='inside',
+                       hovertemplate='<b>%{x}</b><br>Failed: %{y}<extra></extra>')
+            )
+            fig.add_trace(
+                go.Bar(x=x_labels, y=df['tests_skipped'], 
+                       name='Skipped',
+                       marker_color='orange',
+                       text=df['tests_skipped'],
+                       textposition='inside',
+                       hovertemplate='<b>%{x}</b><br>Skipped: %{y}<extra></extra>')
+            )
             
             # Update layout
             fig.update_layout(
                 height=600,
-                title_text="Test Results by CR and Time",
-                xaxis_title="CR Name / Time",
+                title_text="Test Results Over Time (Stacked by Run)",
+                xaxis_title="Test Run",
                 yaxis_title="Test Count",
                 showlegend=True,
-                barmode='group',
+                barmode='stack',  # Stack bars for clearer view with many iterations
                 xaxis={'tickangle': -45}
             )
             

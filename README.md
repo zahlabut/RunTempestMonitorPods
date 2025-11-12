@@ -365,24 +365,26 @@ The graph displays multiple pods on a single interactive chart with:
 
 #### Test Results Graph
 
-Interactive HTML graph showing **test counts by CR and time**:
-- **Grouped bar chart** - Shows passed, failed, and skipped tests for each CR
-- **Color-coded bars** - Green (passed), Red (failed), Orange (skipped)
-- **Clear CR identification** - Each CR shown separately with timestamp
+Interactive HTML graph showing **test counts over time with stacked bars**:
+- **Stacked bar chart** - Each bar shows passed (green), failed (red), and skipped (orange) tests
+- **Run tracking** - X-axis shows "Run #1", "Run #2", etc. with timestamps
+- **Iteration trends** - See how test results change across multiple runs
+- **Text annotations** - Test counts displayed inside bars for quick reading
 
 **Example**: Generated as `test_results_YYYYMMDD_HHMMSS.html`
 
 The graph visualizes:
-- Test counts grouped by CR name and execution time
-- Easy comparison between different CRs and iterations
-- Hover tooltips showing exact counts
-- Clear visual distinction between passed/failed/skipped
+- **Single CR**: Shows "Run #1", "Run #2", ... "Run #10" chronologically
+- **Multiple CRs**: Shows "CR-name Run #1", "CR-name Run #2", etc.
+- Stacked bars make it easy to see total test count and breakdown
+- Perfect for analyzing trends over 10+ iterations
 
 **What to look for in the graph:**
-- ✅ **High green bars**: Many passed tests
-- ❌ **Red bars**: Failed tests needing investigation
-- 🟠 **Orange bars**: Skipped tests (may indicate configuration issues)
-- 📊 **Bar patterns**: Compare results across different CRs and iterations
+- ✅ **Tall green sections**: Many passed tests (good!)
+- ❌ **Red sections**: Failed tests needing investigation
+- 🟠 **Orange sections**: Skipped tests (may indicate configuration issues)
+- 📈 **Consistency**: Stable bar heights across runs indicate reliable tests
+- 📉 **Growing red**: Increasing failures over iterations may indicate flaky tests or environment degradation
 
 #### Test Execution Times Graph
 
