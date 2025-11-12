@@ -595,7 +595,7 @@ class CSVExporter:
     
     def create_results_archive(self) -> str:
         """
-        Create a zip archive containing only the web_report directory.
+        Create a zip archive containing web_report contents (index.html + src/).
         
         Returns:
             Path to the created zip file
@@ -607,18 +607,18 @@ class CSVExporter:
                 logger.warning("web_report directory does not exist, cannot create archive")
                 return ""
             
-            # Create zip file containing only web_report directory
+            # Create zip file with contents directly (no web_report/ wrapper)
             with zipfile.ZipFile(self.archive_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 file_count = 0
                 for root, dirs, files in os.walk(web_report_dir):
                     for file in files:
                         file_path = os.path.join(root, file)
-                        # Create relative path for zip archive (relative to results dir)
-                        arcname = os.path.relpath(file_path, self.results_dir)
+                        # Create relative path from web_report dir (removes web_report/ prefix)
+                        arcname = os.path.relpath(file_path, web_report_dir)
                         zipf.write(file_path, arcname)
                         file_count += 1
             
-            logger.info(f"Created results archive: {self.archive_zip} (web_report with {file_count} files)")
+            logger.info(f"Created results archive: {self.archive_zip} ({file_count} files: index.html + src/)")
             return self.archive_zip
             
         except Exception as e:

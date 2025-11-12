@@ -205,15 +205,17 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 **Important**: The tool automatically manages the results directory:
 
 - 📦 **On Startup**: Any existing result files (including old `web_report/`) are archived to `old_results_archive_{timestamp}.zip` and removed
-- 📦 **On Completion**: The `web_report/` directory is packaged into `results_archive_{timestamp}.zip`
-  - Contains: **Only the latest run** - index.html, all graphs (HTML), all CSV files, and all images
-  - Ready to extract and upload directly to web server
+- 📦 **On Completion**: Web report contents packaged into `results_archive_{timestamp}.zip`
+  - Contains: **index.html** + **src/** folder with all files
+  - Extracts to a clean directory structure ready for web deployment
+  - No extra wrapper directories - just the web-ready content
 - 🧹 **Clean Workspace**: Each run starts with a completely clean results directory
 
 This ensures you always have:
 - Clean, organized results for the **current run only**
 - Archived history from previous runs (in `old_results_archive_*.zip`)
 - Single self-contained web report with no duplicate files from previous runs
+- **Simple extraction**: Unzip and upload - no need to navigate into subdirectories
 
 ### Directory Structure
 
@@ -510,7 +512,7 @@ ssh root@<your_bastion_host> "su - zuul -c 'ssh -q controller-0 \"base64 /path/t
 
 Note: Using base64 encoding to safely transfer binary ZIP file
 
-Archive contains: Complete web_report/ directory (index.html + all graphs, CSVs, and images)
+Archive contains: index.html + src/ (all graphs, CSVs, and images) - ready for web deployment
 Archive size: 2.85 MB
 Archive location: /path/to/results_archive_20251106_143022.zip
 ============================================================
@@ -527,26 +529,27 @@ Archive location: /path/to/results_archive_20251106_143022.zip
 # Extract the archive
 unzip results_archive_20251106_143022.zip
 
-# You'll have ONLY:
-# web_report/
-#   ├── index.html           (landing page at root)
-#   └── src/                 (all graphs, CSVs, images from latest run only)
-#       ├── pod_metrics_YYYYMMDD_HHMMSS.html
-#       ├── test_results_YYYYMMDD_HHMMSS.html
-#       ├── test_execution_times_YYYYMMDD_HHMMSS.html
-#       ├── tempest_monitoring_metrics_*.csv
-#       ├── tempest_monitoring_results_*.csv
-#       ├── tempest_monitoring_failed_tests_*.csv
-#       └── tempest_monitoring_test_execution_times_*.csv
+# You'll have a clean structure ready for web server:
+# results_archive_20251106_143022/
+# ├── index.html           (landing page at root)
+# └── src/                 (all graphs, CSVs, images from latest run only)
+#     ├── pod_metrics_YYYYMMDD_HHMMSS.html
+#     ├── test_results_YYYYMMDD_HHMMSS.html
+#     ├── test_execution_times_YYYYMMDD_HHMMSS.html
+#     ├── tempest_monitoring_metrics_*.csv
+#     ├── tempest_monitoring_results_*.csv
+#     ├── tempest_monitoring_failed_tests_*.csv
+#     └── tempest_monitoring_test_execution_times_*.csv
 
-# Upload web report to HTTP server
-scp -r web_report/ user@webserver:/var/www/html/tempest-results/
+# Upload to HTTP server (upload the extracted directory)
+scp -r results_archive_20251106_143022/ user@webserver:/var/www/html/tempest-results/
 
 # Access via: http://your-server.com/tempest-results/index.html
 # or just:    http://your-server.com/tempest-results/
 ```
 
-**Note**: Each ZIP contains **only one clean web report** from the latest test run - no duplicates!
+**Note**: Each ZIP contains **only one clean web report** from the latest test run - no duplicates!  
+The extracted directory is ready to upload directly to your web server.
 - ✅ Colored output for easy visibility
 
 Simply copy and execute the command, then extract: `unzip results_archive_*.zip`
