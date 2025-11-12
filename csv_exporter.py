@@ -613,11 +613,35 @@ class CSVExporter:
             
             # Copy HTML graph files
             html_files = []
+            
+            # First, copy from provided graph_files list
             for graph_file in graph_files:
                 if graph_file and os.path.exists(graph_file) and graph_file.endswith('.html'):
-                    dest = os.path.join(graphs_dir, os.path.basename(graph_file))
-                    shutil.copy2(graph_file, dest)
-                    html_files.append(os.path.basename(graph_file))
+                    basename = os.path.basename(graph_file)
+                    if basename not in html_files:  # Avoid duplicates
+                        dest = os.path.join(graphs_dir, basename)
+                        shutil.copy2(graph_file, dest)
+                        html_files.append(basename)
+            
+            # Also scan results directory for any HTML graph files (in case some were missed)
+            all_html_in_results = glob.glob(os.path.join(self.results_dir, "*.html"))
+            logger.debug(f"Scanning {self.results_dir} for HTML files, found: {[os.path.basename(f) for f in all_html_in_results]}")
+            
+            for html_file in all_html_in_results:
+                basename = os.path.basename(html_file)
+                # Only include graph files (pod_metrics, test_results, test_execution)
+                if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_']):
+                    if basename not in html_files:  # Avoid duplicates
+                        dest = os.path.join(graphs_dir, basename)
+                        shutil.copy2(html_file, dest)
+                        html_files.append(basename)
+                        logger.debug(f"Added {basename} to web report")
+            
+            if html_files:
+                logger.info(f"Copied {len(html_files)} HTML graph files to web_report/graphs/")
+                logger.debug(f"HTML files in web report: {html_files}")
+            else:
+                logger.warning("No HTML graph files found to include in web report")
             
             # Copy image files (PNG, SVG, PDF)
             image_files = []
