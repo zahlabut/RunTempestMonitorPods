@@ -11,6 +11,8 @@ A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Res
 - 📈 **Data Visualization**: Generate interactive graphs and static plots
 - 💾 **CSV Export**: Export all metrics and results to CSV files
 - 🔍 **Failed Test Tracking**: Automatically extract and track failed tests from pod logs
+- ⏱️ **Test Execution Timing**: Track and visualize execution time for each individual test
+- 🌐 **Web Report**: Auto-generate a beautiful HTML report ready for HTTP server hosting
 - ✅ **Test Verification**: Automatically verify test results (PASS/FAIL)
 - 🛡️ **Failure Handling**: Log failures without interrupting the test process
 - ⏰ **Configurable Duration**: Set test run duration in hours
@@ -184,10 +186,18 @@ results/
 ├── tempest_monitoring_metrics_20250105_143022.csv
 ├── tempest_monitoring_results_20250105_143022.csv
 ├── tempest_monitoring_failed_tests_20250105_143022.csv
+├── tempest_monitoring_test_execution_times_20250105_143022.csv
 ├── pod_metrics_20250105_153045.html
 ├── pod_metrics_20250105_153045.png
 ├── test_results_20250105_153045.html
+├── test_execution_times_20250105_153045.html
+├── test_execution_times_20250105_153045.png
 ├── test_results_20250105_153045.png
+├── web_report/                                   # HTTP server-ready report
+│   ├── index.html                               # Main landing page
+│   ├── graphs/                                  # Interactive HTML graphs
+│   ├── csv/                                     # CSV data files
+│   └── images/                                  # Static images
 ├── results_archive_20250105_143022.zip          # All current results
 └── old_results_archive_20250105_140000.zip      # Previous run (if any)
 ```
@@ -252,6 +262,36 @@ This CSV helps identify patterns in test failures across multiple iterations. Th
 
 The **logged_line column** preserves the exact format from pod logs for reference and debugging.
 
+#### Test Execution Times CSV (`*_test_execution_times_*.csv`)
+
+Contains detailed execution timing for every test run, extracted from pod logs:
+
+| Column | Description |
+|--------|-------------|
+| `timestamp` | When the test execution was recorded |
+| `iteration` | Test loop iteration number (1, 2, 3...) |
+| `cr_name` | Name of the Custom Resource |
+| `pod_name` | Name of the test pod |
+| `test_number` | Test sequence number |
+| `test_name` | Full test name (class.method) |
+| `duration_seconds` | Test execution time in seconds |
+| `status` | Test result (PASSED, FAILED, SKIPPED, OK) |
+
+**Example:**
+```csv
+timestamp,iteration,cr_name,pod_name,test_number,test_name,duration_seconds,status
+2025-11-06T13:16:34.123456,1,tempest-neutron-dns-tests,pod-name,0,setUpClass (neutron_tempest_plugin.scenario.test_dns_integration.DNSIntegrationTests),0.0,FAILED
+2025-11-06T13:16:34.123456,1,tempest-neutron-dns-tests,pod-name,1,neutron_tempest_plugin.scenario.test_dns_integration.DNSIntegrationTests.test_dns_integration,45.23,PASSED
+2025-11-06T13:17:21.456789,2,tempest-neutron-dns-tests,pod-name,1,neutron_tempest_plugin.scenario.test_dns_integration.DNSIntegrationTests.test_dns_integration,47.89,PASSED
+```
+
+This CSV enables powerful analysis:
+- Compare test execution times across iterations
+- Identify slow tests that need optimization
+- Detect performance regressions (increasing execution times)
+- Track test timing trends over multiple runs
+- Correlate timing with pass/fail status
+
 ### Graphs
 
 The tool generates interactive HTML graphs and static images for visualization.
@@ -299,7 +339,107 @@ The graph visualizes:
 - ❌ **Failed tests**: Investigation needed
 - 📉 **Degrading success rate**: Potential environment issues
 
+#### Test Execution Times Graph
+
+Interactive HTML graph showing:
+- **Execution time per test** - Bar chart visualization
+- **Color-coded by status** - Green (PASSED), Red (FAILED), Orange (SKIPPED)
+- **Iteration tracking** - Compare timing across multiple runs
+
+**Example**: Generated as `test_execution_times_YYYYMMDD_HHMMSS.html`
+
+The graph visualizes:
+- Bar charts showing execution duration in seconds for each test
+- Grouped by test name with color-coded status
+- Hover tooltips showing exact duration and iteration number
+- Comparison of test timing across iterations
+
+**What to look for in the graph:**
+- ⏱️ **Slow tests**: Tests with high execution times that may need optimization
+- 📈 **Performance trends**: Increasing execution times over iterations may indicate resource issues
+- ⚡ **Fast failures**: Tests that fail quickly may indicate setup/configuration issues
+- 🔄 **Timing consistency**: Stable execution times indicate reliable test environment
+
 All graphs are also exported as static images (PNG/SVG/PDF).
+
+### Web Report (HTTP Server Ready)
+
+The tool automatically generates a **web-ready report** in `results/web_report/` with a professional HTML interface:
+
+#### Directory Structure
+```
+results/web_report/
+├── index.html              # Main landing page
+├── graphs/                 # Interactive HTML graphs
+│   ├── pod_metrics_*.html
+│   ├── test_results_*.html
+│   └── test_execution_times_*.html
+├── csv/                    # All CSV data files
+│   ├── tempest_monitoring_metrics_*.csv
+│   ├── tempest_monitoring_results_*.csv
+│   ├── tempest_monitoring_failed_tests_*.csv
+│   └── tempest_monitoring_test_execution_times_*.csv
+└── images/                 # Static images (PNG, SVG, PDF)
+    ├── pod_metrics_*.png
+    ├── test_results_*.png
+    └── test_execution_times_*.png
+```
+
+#### Features of the Web Report
+
+✨ **Professional Interface**
+- Beautiful gradient design with responsive layout
+- Summary cards showing total runs, passed, failed, and success rate
+- Organized sections for graphs, CSV files, and images
+- Mobile-friendly responsive design
+
+📊 **Interactive Graphs Section**
+- Direct links to all HTML interactive graphs
+- Descriptive titles and explanations for each graph
+- Opens in new tabs for easy navigation
+
+📁 **CSV Downloads**
+- One-click download buttons for all CSV files
+- Clear descriptions of each dataset
+- Organized and easy to access
+
+🖼️ **Image Previews**
+- Embedded PNG previews for quick visualization
+- Download links for all image formats (PNG, SVG, PDF)
+
+#### How to Use the Web Report
+
+1. **After test completion**, find the web report at:
+   ```
+   results/web_report/index.html
+   ```
+
+2. **Upload to HTTP server**:
+   ```bash
+   # Example using scp to upload to web server
+   scp -r results/web_report/ user@webserver:/var/www/html/tempest-results/
+   
+   # Or using rsync
+   rsync -av results/web_report/ user@webserver:/var/www/html/tempest-results/
+   ```
+
+3. **Access via browser**:
+   ```
+   http://your-server.com/tempest-results/index.html
+   ```
+
+4. **Share with team**:
+   - Email the URL to stakeholders
+   - Embed in CI/CD dashboards
+   - Link from project documentation
+
+#### Benefits
+
+✅ **Professional Presentation**: Impress stakeholders with a polished report  
+✅ **Easy Sharing**: Just upload and share a URL  
+✅ **No Dependencies**: Pure HTML/CSS, works on any web server  
+✅ **Self-Contained**: All files organized and ready to deploy  
+✅ **Interactive**: Team members can explore graphs and download data  
 
 ### Downloading Result Files
 

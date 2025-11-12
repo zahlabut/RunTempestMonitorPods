@@ -178,8 +178,13 @@ def run_cr_with_monitoring(cr_file: str, cr_handler: CRHandler, iteration: int) 
     logger.info(f"[Iteration {iteration}] Extracting failed tests for CR: {cr_name}")
     failed_tests = cr_handler.extract_failed_tests(cr_name, iteration)
     
-    # Store failed tests in results for export
+    # Extract test execution times from pod logs before cleanup
+    logger.info(f"[Iteration {iteration}] Extracting test execution times for CR: {cr_name}")
+    test_execution_times = cr_handler.extract_test_execution_times(cr_name, iteration)
+    
+    # Store failed tests and execution times in results for export
     results["failed_tests"] = failed_tests
+    results["test_execution_times"] = test_execution_times
     
     # Clean up CR after completion (needed for next iteration)
     # Test-operator leaves pods in ERROR status when complete
@@ -279,6 +284,10 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
                     # Export failed tests if any
                     if "failed_tests" in result and result["failed_tests"]:
                         csv_exporter.export_failed_tests(result["failed_tests"])
+                    
+                    # Export test execution times if any
+                    if "test_execution_times" in result and result["test_execution_times"]:
+                        csv_exporter.export_test_execution_times(result["test_execution_times"])
                     
                     # Log result
                     status = "PASSED" if result["passed"] else "FAILED"
@@ -406,8 +415,9 @@ def main():
                 logger.info(f"Deleting active CR: {cr_name}")
                 cr_handler.delete_cr(cr_name)
         
-        # Generate graphs
+        # Generate graphs and track for web report
         graph_files = []
+        
         if config['output']['enable_graphs']:
             logger.info("Generating graphs...")
             try:
@@ -419,6 +429,20 @@ def main():
                     logger.warning("No graphs were generated (possibly not enough data)")
             except Exception as e:
                 logger.error(f"Failed to generate graphs: {e}")
+        
+        # Generate web report
+        logger.info("Generating web report...")
+        try:
+            test_summary = {
+                'total_runs': len(all_results),
+                'passed': sum(1 for r in all_results if r.get('passed', False)),
+                'failed': sum(1 for r in all_results if not r.get('passed', True))
+            }
+            web_report_dir = csv_exporter.generate_web_report(test_summary, graph_files)
+            if web_report_dir:
+                logger.info(f"Web report generated at: {web_report_dir}")
+        except Exception as e:
+            logger.error(f"Failed to generate web report: {e}")
         
         # Create zip archive of all results
         logger.info("Creating results archive...")
@@ -441,6 +465,13 @@ def main():
         logger.info(f"Results CSV: {csv_exporter.results_csv}")
         if os.path.exists(csv_exporter.failed_tests_csv):
             logger.info(f"Failed Tests CSV: {csv_exporter.failed_tests_csv}")
+        if os.path.exists(csv_exporter.test_execution_csv):
+            logger.info(f"Test Execution Times CSV: {csv_exporter.test_execution_csv}")
+        
+        # Show web report location
+        if 'web_report_dir' in locals() and web_report_dir:
+            logger.info(f"\n📊 Web Report: {web_report_dir}/index.html")
+            logger.info(f"    Upload the 'web_report' directory to your HTTP server")
         
         # Print download command for the zip archive
         if archive_file and os.path.exists(archive_file):

@@ -8,6 +8,7 @@ CSV exporter and graph plotting module for test results and metrics.
 import logging
 import os
 import csv
+import glob
 import zipfile
 from datetime import datetime
 from typing import List, Dict
@@ -49,6 +50,7 @@ class CSVExporter:
         self.metrics_csv = os.path.join(results_dir, f"{csv_filename}_metrics_{timestamp}.csv")
         self.results_csv = os.path.join(results_dir, f"{csv_filename}_results_{timestamp}.csv")
         self.failed_tests_csv = os.path.join(results_dir, f"{csv_filename}_failed_tests_{timestamp}.csv")
+        self.test_execution_csv = os.path.join(results_dir, f"{csv_filename}_test_execution_times_{timestamp}.csv")
         self.archive_zip = os.path.join(results_dir, f"results_archive_{timestamp}.zip")
         
     def export_metrics(self, metrics: List[Dict]) -> str:
@@ -159,6 +161,42 @@ class CSVExporter:
             logger.error(f"Failed to export failed tests to CSV: {e}")
             return ""
     
+    def export_test_execution_times(self, test_executions: List[Dict]) -> str:
+        """
+        Export test execution times to CSV.
+        
+        Args:
+            test_executions: List of test execution dictionaries
+            
+        Returns:
+            Path to the CSV file
+        """
+        if not test_executions:
+            logger.debug("No test execution times to export")
+            return ""
+        
+        try:
+            # Define CSV headers
+            headers = ["timestamp", "iteration", "cr_name", "pod_name", "test_number", "test_name", "duration_seconds", "status"]
+            
+            file_exists = os.path.exists(self.test_execution_csv)
+            
+            with open(self.test_execution_csv, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=headers)
+                
+                if not file_exists:
+                    writer.writeheader()
+                
+                for test_exec in test_executions:
+                    writer.writerow({k: test_exec.get(k, "") for k in headers})
+            
+            logger.info(f"Exported {len(test_executions)} test execution entries to {self.test_execution_csv}")
+            return self.test_execution_csv
+            
+        except Exception as e:
+            logger.error(f"Failed to export test execution times to CSV: {e}")
+            return ""
+    
     def generate_graphs(self) -> List[str]:
         """
         Generate graphs from the exported CSV data.
@@ -189,6 +227,15 @@ class CSVExporter:
                     graph_files.append(graph_file)
             except Exception as e:
                 logger.error(f"Failed to generate test results graph: {e}")
+        
+        # Generate test execution times graph
+        if os.path.exists(self.test_execution_csv):
+            try:
+                graph_file = self._generate_test_execution_graph()
+                if graph_file:
+                    graph_files.append(graph_file)
+            except Exception as e:
+                logger.error(f"Failed to generate test execution times graph: {e}")
         
         return graph_files
     
@@ -356,6 +403,77 @@ class CSVExporter:
             logger.error(f"Error generating test results graph: {e}")
             return ""
     
+    def _generate_test_execution_graph(self) -> str:
+        """Generate graph for test execution times."""
+        try:
+            df = pd.read_csv(self.test_execution_csv)
+            
+            if df.empty:
+                logger.warning("No data to plot for test execution times")
+                return ""
+            
+            # Convert timestamp to datetime
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            
+            # Convert duration to numeric
+            df['duration_seconds'] = pd.to_numeric(df['duration_seconds'], errors='coerce').fillna(0)
+            
+            # Sort by test_name for better visualization
+            df = df.sort_values(['test_name', 'timestamp'])
+            
+            # Create figure
+            fig = go.Figure()
+            
+            # Add a bar for each test, colored by status
+            color_map = {
+                'PASSED': 'green',
+                'FAILED': 'red',
+                'SKIPPED': 'orange',
+                'OK': 'green'
+            }
+            
+            for status in df['status'].unique():
+                status_data = df[df['status'] == status]
+                fig.add_trace(go.Bar(
+                    x=status_data['test_name'],
+                    y=status_data['duration_seconds'],
+                    name=status,
+                    marker_color=color_map.get(status, 'blue'),
+                    text=status_data['duration_seconds'].round(2),
+                    textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>Duration: %{y:.2f}s<br>Iteration: %{customdata[0]}<extra></extra>',
+                    customdata=status_data[['iteration']].values
+                ))
+            
+            # Update layout
+            fig.update_layout(
+                title_text="Test Execution Times",
+                xaxis_title="Test Name",
+                yaxis_title="Duration (seconds)",
+                height=600,
+                showlegend=True,
+                barmode='group',
+                xaxis={'tickangle': -45, 'tickfont': {'size': 8}}
+            )
+            
+            # Save graph
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            graph_file = os.path.join(self.results_dir, f"test_execution_times_{timestamp}.html")
+            fig.write_html(graph_file)
+            
+            # Also save as static image
+            if self.graph_format in ['png', 'svg', 'pdf']:
+                static_file = os.path.join(self.results_dir, f"test_execution_times_{timestamp}.{self.graph_format}")
+                fig.write_image(static_file)
+                logger.info(f"Generated static graph: {static_file}")
+            
+            logger.info(f"Generated test execution times graph: {graph_file}")
+            return graph_file
+            
+        except Exception as e:
+            logger.error(f"Error generating test execution times graph: {e}")
+            return ""
+    
     def _parse_cpu_value(self, cpu_str: str) -> float:
         """Parse CPU value from string (e.g., '100m' -> 100)."""
         try:
@@ -456,4 +574,420 @@ class CSVExporter:
         except Exception as e:
             logger.error(f"Failed to create results archive: {e}")
             return ""
+    
+    def generate_web_report(self, test_summary: dict, graph_files: List[str]) -> str:
+        """
+        Generate a web-ready report with index.html and organized structure.
+        
+        Args:
+            test_summary: Dictionary with test run statistics
+            graph_files: List of generated graph file paths
+            
+        Returns:
+            Path to the web report directory
+        """
+        import shutil
+        from datetime import datetime
+        
+        try:
+            # Create web report directory
+            web_dir = os.path.join(self.results_dir, "web_report")
+            os.makedirs(web_dir, exist_ok=True)
+            
+            # Create subdirectories
+            graphs_dir = os.path.join(web_dir, "graphs")
+            csv_dir = os.path.join(web_dir, "csv")
+            images_dir = os.path.join(web_dir, "images")
+            os.makedirs(graphs_dir, exist_ok=True)
+            os.makedirs(csv_dir, exist_ok=True)
+            os.makedirs(images_dir, exist_ok=True)
+            
+            # Copy HTML graph files
+            html_files = []
+            for graph_file in graph_files:
+                if graph_file and os.path.exists(graph_file) and graph_file.endswith('.html'):
+                    dest = os.path.join(graphs_dir, os.path.basename(graph_file))
+                    shutil.copy2(graph_file, dest)
+                    html_files.append(os.path.basename(graph_file))
+            
+            # Copy image files (PNG, SVG, PDF)
+            image_files = []
+            for ext in ['png', 'svg', 'pdf']:
+                for img_file in glob.glob(os.path.join(self.results_dir, f"*.{ext}")):
+                    dest = os.path.join(images_dir, os.path.basename(img_file))
+                    shutil.copy2(img_file, dest)
+                    image_files.append(os.path.basename(img_file))
+            
+            # Copy CSV files
+            csv_files = []
+            for csv_file in [self.metrics_csv, self.results_csv, self.failed_tests_csv, self.test_execution_csv]:
+                if os.path.exists(csv_file):
+                    dest = os.path.join(csv_dir, os.path.basename(csv_file))
+                    shutil.copy2(csv_file, dest)
+                    csv_files.append(os.path.basename(csv_file))
+            
+            # Generate index.html
+            index_path = os.path.join(web_dir, "index.html")
+            self._generate_index_html(index_path, test_summary, html_files, csv_files, image_files)
+            
+            logger.info(f"Generated web report at: {web_dir}")
+            return web_dir
+            
+        except Exception as e:
+            logger.error(f"Failed to generate web report: {e}")
+            return ""
+    
+    def _generate_index_html(self, output_path: str, test_summary: dict, 
+                            html_files: List[str], csv_files: List[str], 
+                            image_files: List[str]) -> None:
+        """Generate the main index.html file."""
+        from datetime import datetime
+        
+        # Get statistics
+        total_runs = test_summary.get('total_runs', 0)
+        passed = test_summary.get('passed', 0)
+        failed = test_summary.get('failed', 0)
+        success_rate = (passed / total_runs * 100) if total_runs > 0 else 0
+        
+        # Generate HTML content
+        html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempest Test Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }}
+        
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+        }}
+        
+        header {{
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }}
+        
+        h1 {{
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }}
+        
+        .subtitle {{
+            color: #666;
+            font-size: 1.1em;
+        }}
+        
+        .summary {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }}
+        
+        .stat-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: transform 0.3s ease;
+        }}
+        
+        .stat-card:hover {{
+            transform: translateY(-5px);
+        }}
+        
+        .stat-card.success {{
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }}
+        
+        .stat-card.danger {{
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }}
+        
+        .stat-card.info {{
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }}
+        
+        .stat-value {{
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }}
+        
+        .stat-label {{
+            font-size: 1em;
+            opacity: 0.9;
+        }}
+        
+        section {{
+            margin-bottom: 40px;
+        }}
+        
+        h2 {{
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }}
+        
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }}
+        
+        .card {{
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }}
+        
+        .card:hover {{
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }}
+        
+        .card h3 {{
+            color: #333;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }}
+        
+        .card a {{
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid #667eea;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }}
+        
+        .card a:hover {{
+            background: #667eea;
+            color: white;
+        }}
+        
+        .csv-icon::before {{
+            content: "📊 ";
+        }}
+        
+        .graph-icon::before {{
+            content: "📈 ";
+        }}
+        
+        .image-icon::before {{
+            content: "🖼️ ";
+        }}
+        
+        .image-preview {{
+            max-width: 100%;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }}
+        
+        footer {{
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            color: #666;
+        }}
+        
+        .timestamp {{
+            color: #999;
+            font-size: 0.9em;
+        }}
+        
+        @media (max-width: 768px) {{
+            .container {{
+                padding: 20px;
+            }}
+            
+            h1 {{
+                font-size: 1.8em;
+            }}
+            
+            .stat-value {{
+                font-size: 2em;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 OpenStack Tempest Test Results</h1>
+            <p class="subtitle">Automated Testing Report</p>
+            <p class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </header>
+        
+        <section class="summary">
+            <div class="stat-card info">
+                <div class="stat-value">{total_runs}</div>
+                <div class="stat-label">Total Test Runs</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value">{passed}</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value">{failed}</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{success_rate:.1f}%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+        </section>
+"""
+        
+        # Interactive Graphs Section
+        if html_files:
+            html_content += """
+        <section>
+            <h2>📈 Interactive Graphs</h2>
+            <div class="grid">
+"""
+            for html_file in sorted(html_files):
+                # Create friendly names
+                if "pod_metrics" in html_file:
+                    title = "Pod Metrics (CPU, Memory, Restarts)"
+                    desc = "Monitor resource usage and stability across all pods"
+                elif "test_results" in html_file:
+                    title = "Test Results (Pass/Fail/Skip)"
+                    desc = "Track test outcomes and counts over time"
+                elif "test_execution" in html_file:
+                    title = "Test Execution Times"
+                    desc = "Analyze individual test performance and timing"
+                else:
+                    title = html_file.replace('.html', '').replace('_', ' ').title()
+                    desc = "Interactive visualization"
+                
+                html_content += f"""
+                <div class="card">
+                    <h3 class="graph-icon">{title}</h3>
+                    <p style="color: #666; margin-bottom: 15px;">{desc}</p>
+                    <a href="graphs/{html_file}" target="_blank">Open Graph →</a>
+                </div>
+"""
+            html_content += """
+            </div>
+        </section>
+"""
+        
+        # CSV Data Files Section
+        if csv_files:
+            html_content += """
+        <section>
+            <h2>📊 CSV Data Files</h2>
+            <div class="grid">
+"""
+            for csv_file in sorted(csv_files):
+                # Create friendly names and descriptions
+                if "metrics" in csv_file:
+                    title = "Pod Metrics Data"
+                    desc = "CPU, memory, and restart counts for all monitored pods"
+                elif "results" in csv_file and "failed" not in csv_file and "execution" not in csv_file:
+                    title = "Test Results Summary"
+                    desc = "Pass/fail status and test counts per iteration"
+                elif "failed_tests" in csv_file:
+                    title = "Failed Tests Details"
+                    desc = "Detailed breakdown of all failed tests with timing"
+                elif "execution_times" in csv_file:
+                    title = "Test Execution Times"
+                    desc = "Duration and status for every individual test"
+                else:
+                    title = csv_file.replace('.csv', '').replace('_', ' ').title()
+                    desc = "Raw data export"
+                
+                html_content += f"""
+                <div class="card">
+                    <h3 class="csv-icon">{title}</h3>
+                    <p style="color: #666; margin-bottom: 15px;">{desc}</p>
+                    <a href="csv/{csv_file}" download>Download CSV →</a>
+                </div>
+"""
+            html_content += """
+            </div>
+        </section>
+"""
+        
+        # Static Images Section
+        if image_files:
+            html_content += """
+        <section>
+            <h2>🖼️ Static Images</h2>
+            <div class="grid">
+"""
+            for image_file in sorted(image_files):
+                # Only show PNG images with previews
+                if image_file.endswith('.png'):
+                    title = image_file.replace('.png', '').replace('_', ' ').title()
+                    html_content += f"""
+                <div class="card">
+                    <h3 class="image-icon">{title}</h3>
+                    <a href="images/{image_file}" download>Download →</a>
+                    <img src="images/{image_file}" alt="{title}" class="image-preview">
+                </div>
+"""
+                else:
+                    title = image_file.replace(os.path.splitext(image_file)[1], '').replace('_', ' ').title()
+                    html_content += f"""
+                <div class="card">
+                    <h3 class="image-icon">{title}</h3>
+                    <a href="images/{image_file}" download>Download {os.path.splitext(image_file)[1].upper()} →</a>
+                </div>
+"""
+            html_content += """
+            </div>
+        </section>
+"""
+        
+        # Footer
+        html_content += """
+        <footer>
+            <p><strong>OpenStack Tempest Test Runner</strong></p>
+            <p style="margin-top: 10px;">Automated testing with comprehensive pod monitoring and metrics collection</p>
+            <p style="margin-top: 10px; color: #999;">Generated by RunTempestMonitorPods</p>
+        </footer>
+    </div>
+</body>
+</html>
+"""
+        
+        # Write to file
+        with open(output_path, 'w') as f:
+            f.write(html_content)
+        
+        logger.info(f"Generated index.html at: {output_path}")
 
