@@ -168,16 +168,16 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 
 **Important**: The tool automatically manages the results directory:
 
-- 📦 **On Startup**: Any existing result files are archived to `old_results_archive_{timestamp}.zip` and removed from the directory
+- 📦 **On Startup**: Any existing result files (including old `web_report/`) are archived to `old_results_archive_{timestamp}.zip` and removed
 - 📦 **On Completion**: The `web_report/` directory is packaged into `results_archive_{timestamp}.zip`
-  - Contains: index.html, all graphs (HTML), all CSV files, and all images
+  - Contains: **Only the latest run** - index.html, all graphs (HTML), all CSV files, and all images
   - Ready to extract and upload directly to web server
-- 🧹 **Clean Workspace**: Each run starts with a clean results directory
+- 🧹 **Clean Workspace**: Each run starts with a completely clean results directory
 
 This ensures you always have:
-- Clean, organized results for the current run
-- Archived history from previous runs
-- Single self-contained web report directory in ZIP file
+- Clean, organized results for the **current run only**
+- Archived history from previous runs (in `old_results_archive_*.zip`)
+- Single self-contained web report with no duplicate files from previous runs
 
 ### Directory Structure
 
@@ -487,10 +487,17 @@ Archive location: /path/to/results_archive_20251106_143022.zip
 # Extract the archive
 unzip results_archive_20251106_143022.zip
 
-# You'll have:
+# You'll have ONLY:
 # web_report/
 #   ├── index.html           (landing page at root)
-#   └── src/                 (all graphs, CSVs, images)
+#   └── src/                 (all graphs, CSVs, images from latest run only)
+#       ├── pod_metrics_YYYYMMDD_HHMMSS.html
+#       ├── test_results_YYYYMMDD_HHMMSS.html
+#       ├── test_execution_times_YYYYMMDD_HHMMSS.html
+#       ├── tempest_monitoring_metrics_*.csv
+#       ├── tempest_monitoring_results_*.csv
+#       ├── tempest_monitoring_failed_tests_*.csv
+#       └── tempest_monitoring_test_execution_times_*.csv
 
 # Upload web report to HTTP server
 scp -r web_report/ user@webserver:/var/www/html/tempest-results/
@@ -498,6 +505,8 @@ scp -r web_report/ user@webserver:/var/www/html/tempest-results/
 # Access via: http://your-server.com/tempest-results/index.html
 # or just:    http://your-server.com/tempest-results/
 ```
+
+**Note**: Each ZIP contains **only one clean web report** from the latest test run - no duplicates!
 - ✅ Colored output for easy visibility
 
 Simply copy and execute the command, then extract: `unzip results_archive_*.zip`

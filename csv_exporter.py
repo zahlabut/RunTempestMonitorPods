@@ -506,6 +506,8 @@ class CSVExporter:
     
     def _archive_old_results(self):
         """Archive old results in the results directory to a zip file."""
+        import shutil
+        
         try:
             # Check if there are any files to archive
             if not os.path.exists(self.results_dir):
@@ -514,7 +516,11 @@ class CSVExporter:
             files_to_archive = [f for f in os.listdir(self.results_dir) 
                                if f.endswith(('.csv', '.html', '.png', '.svg', '.pdf'))]
             
-            if not files_to_archive:
+            # Check if web_report directory exists
+            web_report_dir = os.path.join(self.results_dir, 'web_report')
+            has_web_report = os.path.exists(web_report_dir)
+            
+            if not files_to_archive and not has_web_report:
                 logger.debug("No old results to archive")
                 return
             
@@ -524,17 +530,31 @@ class CSVExporter:
             
             # Create zip file
             with zipfile.ZipFile(archive_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Archive individual files
                 for filename in files_to_archive:
                     file_path = os.path.join(self.results_dir, filename)
                     zipf.write(file_path, filename)
                     logger.debug(f"Archived: {filename}")
+                
+                # Archive web_report directory if it exists
+                if has_web_report:
+                    for root, dirs, files in os.walk(web_report_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, self.results_dir)
+                            zipf.write(file_path, arcname)
             
-            logger.info(f"Archived {len(files_to_archive)} old result files to {archive_name}")
+            logger.info(f"Archived {len(files_to_archive)} old result files + web_report to {archive_name}")
             
             # Delete old files after archiving
             for filename in files_to_archive:
                 file_path = os.path.join(self.results_dir, filename)
                 os.remove(file_path)
+            
+            # Remove old web_report directory
+            if has_web_report:
+                shutil.rmtree(web_report_dir)
+                logger.info("Removed old web_report directory")
                 
         except Exception as e:
             logger.warning(f"Failed to archive old results: {e}")
@@ -591,6 +611,12 @@ class CSVExporter:
             #   ├── index.html (at root)
             #   └── src/ (all supporting files)
             web_dir = os.path.join(self.results_dir, "web_report")
+            
+            # Remove existing web_report directory if it exists (safety check)
+            if os.path.exists(web_dir):
+                shutil.rmtree(web_dir)
+                logger.debug("Cleared existing web_report directory")
+            
             src_dir = os.path.join(web_dir, "src")
             os.makedirs(web_dir, exist_ok=True)
             os.makedirs(src_dir, exist_ok=True)
