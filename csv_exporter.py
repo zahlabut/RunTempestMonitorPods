@@ -669,11 +669,16 @@ class CSVExporter:
                 if len(error_df) > 50:
                     error_df = error_df.tail(50)
                 
+                # Format response time for display
+                response_time_display = error_df['response_time'].apply(
+                    lambda x: f"{x:.3f}s" if x > 0 else "N/A"
+                )
+                
                 # Create table data
                 fig.add_trace(
                     go.Table(
                         header=dict(
-                            values=['<b>Time</b>', '<b>Service</b>', '<b>Method</b>', '<b>Endpoint</b>', '<b>Status</b>'],
+                            values=['<b>Time</b>', '<b>Service</b>', '<b>Method</b>', '<b>Endpoint</b>', '<b>Status</b>', '<b>Response Time</b>'],
                             fill_color='paleturquoise',
                             align='left',
                             font=dict(size=12, color='black')
@@ -684,7 +689,8 @@ class CSVExporter:
                                 error_df['service'],
                                 error_df['method'],
                                 error_df['endpoint'].str[:80],  # Truncate long URLs
-                                error_df['status_code']
+                                error_df['status_code'],
+                                response_time_display
                             ],
                             fill_color=[['white', 'lightgray'] * (len(error_df) // 2 + 1)],
                             align='left',
