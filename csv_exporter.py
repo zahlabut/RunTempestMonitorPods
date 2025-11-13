@@ -545,7 +545,7 @@ class CSVExporter:
                         f'API Response Times Over Time{timing_note}', 
                         'Response Code Distribution', 
                         'Error Rate Timeline',
-                        '🔴 Error Requests (4xx/5xx) - Click points for details'
+                        '🔴 Error Requests (4xx/5xx) - Sorted by Status Code'
                     ),
                     vertical_spacing=0.08,
                     specs=[[{"secondary_y": False}],
@@ -663,34 +663,31 @@ class CSVExporter:
             # Plot 4: Error details table (if errors exist)
             if has_errors:
                 error_df = df[df['is_error'] == True].copy()
-                error_df = error_df.sort_values('timestamp')
+                
+                # Sort by status code (to group error types) then by time
+                # This makes it easy to see all 404s together, all 500s together, etc.
+                error_df = error_df.sort_values(['status_code', 'timestamp'], ascending=[True, False])
                 
                 # Limit to most recent 50 errors for readability
                 if len(error_df) > 50:
                     error_df = error_df.tail(50)
                 
-                # Format response time for display
-                response_time_display = error_df['response_time'].apply(
-                    lambda x: f"{x:.3f}s" if x > 0 else "N/A"
-                )
-                
-                # Create table data
+                # Create table data (removed Response Time column - not available in most API logs)
                 fig.add_trace(
                     go.Table(
                         header=dict(
-                            values=['<b>Time</b>', '<b>Service</b>', '<b>Method</b>', '<b>Endpoint</b>', '<b>Status</b>', '<b>Response Time</b>'],
+                            values=['<b>Status</b>', '<b>Time</b>', '<b>Service</b>', '<b>Method</b>', '<b>Endpoint</b>'],
                             fill_color='paleturquoise',
                             align='left',
                             font=dict(size=12, color='black')
                         ),
                         cells=dict(
                             values=[
+                                error_df['status_code'],
                                 error_df['timestamp'].dt.strftime('%H:%M:%S'),
                                 error_df['service'],
                                 error_df['method'],
-                                error_df['endpoint'].str[:80],  # Truncate long URLs
-                                error_df['status_code'],
-                                response_time_display
+                                error_df['endpoint'].str[:80]  # Truncate long URLs
                             ],
                             fill_color=[['white', 'lightgray'] * (len(error_df) // 2 + 1)],
                             align='left',
