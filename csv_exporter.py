@@ -534,15 +534,34 @@ class CSVExporter:
             has_timing = (df['response_time'] > 0).any()
             timing_note = "" if has_timing else " (Timing data not available)"
             
-            # Create figure with subplots
-            fig = make_subplots(
-                rows=3, cols=1,
-                subplot_titles=(f'API Response Times Over Time{timing_note}', 'Response Code Distribution', 'Error Rate Timeline'),
-                vertical_spacing=0.12,
-                specs=[[{"secondary_y": False}],
-                       [{"type": "bar"}],
-                       [{"secondary_y": False}]]
-            )
+            # Check if there are errors to show
+            has_errors = (df['is_error'] == True).any()
+            
+            # Create figure with subplots (4 rows if errors exist, 3 otherwise)
+            if has_errors:
+                fig = make_subplots(
+                    rows=4, cols=1,
+                    subplot_titles=(
+                        f'API Response Times Over Time{timing_note}', 
+                        'Response Code Distribution', 
+                        'Error Rate Timeline',
+                        '🔴 Error Requests (4xx/5xx) - Click points for details'
+                    ),
+                    vertical_spacing=0.08,
+                    specs=[[{"secondary_y": False}],
+                           [{"type": "bar"}],
+                           [{"secondary_y": False}],
+                           [{"type": "table"}]]
+                )
+            else:
+                fig = make_subplots(
+                    rows=3, cols=1,
+                    subplot_titles=(f'API Response Times Over Time{timing_note}', 'Response Code Distribution', 'Error Rate Timeline'),
+                    vertical_spacing=0.12,
+                    specs=[[{"secondary_y": False}],
+                           [{"type": "bar"}],
+                           [{"secondary_y": False}]]
+                )
             
             # Plot 1: Response times by service
             for service in df['service'].unique():
@@ -605,9 +624,45 @@ class CSVExporter:
                 row=3, col=1
             )
             
+            # Plot 4: Error details table (if errors exist)
+            if has_errors:
+                error_df = df[df['is_error'] == True].copy()
+                error_df = error_df.sort_values('timestamp')
+                
+                # Limit to most recent 50 errors for readability
+                if len(error_df) > 50:
+                    error_df = error_df.tail(50)
+                
+                # Create table data
+                fig.add_trace(
+                    go.Table(
+                        header=dict(
+                            values=['<b>Time</b>', '<b>Service</b>', '<b>Method</b>', '<b>Endpoint</b>', '<b>Status</b>'],
+                            fill_color='paleturquoise',
+                            align='left',
+                            font=dict(size=12, color='black')
+                        ),
+                        cells=dict(
+                            values=[
+                                error_df['timestamp'].dt.strftime('%H:%M:%S'),
+                                error_df['service'],
+                                error_df['method'],
+                                error_df['endpoint'].str[:80],  # Truncate long URLs
+                                error_df['status_code']
+                            ],
+                            fill_color=[['white', 'lightgray'] * (len(error_df) // 2 + 1)],
+                            align='left',
+                            font=dict(size=11),
+                            height=25
+                        )
+                    ),
+                    row=4, col=1
+                )
+            
             # Update layout
+            graph_height = 1300 if has_errors else 1000
             fig.update_layout(
-                height=1000,
+                height=graph_height,
                 title_text="API Performance Analysis",
                 showlegend=True
             )

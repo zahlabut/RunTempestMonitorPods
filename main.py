@@ -440,6 +440,24 @@ def main():
                 logger.info(f"  Error Requests: {api_data['error_requests']}")
                 logger.info(f"  Success Rate: {api_data['success_rate']:.2f}%")
                 logger.info(f"  Avg Response Time: {api_data['avg_response_time']:.3f}s")
+                
+                # Show error endpoints if any
+                if api_data['error_requests'] > 0:
+                    error_reqs = [r for r in api_data['requests'] if r['is_error']]
+                    logger.info(f"\n  🔴 Error Endpoints (HTTP 4xx/5xx):")
+                    
+                    # Group errors by endpoint and status
+                    error_summary = {}
+                    for req in error_reqs:
+                        key = (req['method'], req['endpoint'], req['status_code'])
+                        if key not in error_summary:
+                            error_summary[key] = {'count': 0, 'service': req['service']}
+                        error_summary[key]['count'] += 1
+                    
+                    # Show up to 10 most common errors
+                    sorted_errors = sorted(error_summary.items(), key=lambda x: x[1]['count'], reverse=True)[:10]
+                    for (method, endpoint, status), info in sorted_errors:
+                        logger.info(f"    [{info['service']}] {method} {endpoint} → {status} ({info['count']}x)")
             else:
                 logger.warning("No API requests found in logs")
         except Exception as e:
