@@ -1,0 +1,42 @@
+---
+apiVersion: test.openstack.org/v1beta1
+kind: Tempest
+metadata:
+ name: tempest-tests-octavia
+ namespace: openstack
+spec:
+ containerImage: quay.io/podified-antelope-centos9/openstack-tempest-all:current-podified
+ tempestRun:
+   includeList: |
+     octavia_tempest_plugin.*
+   excludeList: |
+     octavia_tempest_plugin.tests.scenario.v2.*
+   concurrency: 8
+ tempestconfRun:
+   overrides: |
+     compute.min_compute_nodes 1
+     compute-feature-enabled.live_migration false
+     network.project_network_mask_bits 26
+     image.http_image 'http://rhos-qe-mirror.lab.eng.tlv2.redhat.com/images/cirros-0.4.0-x86_64-uec.tar.gz'
+     network-feature-enabled.api_extensions dvr
+     network-feature-enabled.port_security 'True'
+     load_balancer.enable_security_groups True
+     load_balancer.member_role 'member'
+     load_balancer.admin_role 'admin'
+     load_balancer.RBAC_test_type 'owner_or_admin'
+     load_balancer.region 'regionOne'
+     load_balancer.provider 'ovn'
+     load_balancer.test_reuse_connection 'False'
+     load_balancer.test_with_ipv6 'False'
+     load_balancer.load_balancing_algorithm 'SOURCE_IP_PORT'
+     load_balancer.test_flavors 'False'
+     loadbalancer-feature-enabled.health_monitor_enabled 'False'
+     loadbalancer-feature-enabled.pool_algorithms_enabled 'False'
+     loadbalancer-feature-enabled.l7_protocol_enabled 'False'
+     loadbalancer-feature-enabled.l4_protocol 'TCP'
+     loadbalancer-feature-enabled.session_persistence_enabled 'False'
+     loadbalancer-feature-enabled.not_implemented_is_error 'False'
+     identity-feature-enabled.api_v2_admin 'False'
+     validation.run_validation 'True'
+     compute-feature-enabled.cold_migration True
+     compute-feature-enabled.scheduler_available_filters 'RetryFilter,AvailabilityZoneFilter,ComputeFilter,ComputeCapabilitiesFilter,ImagePropertiesFilter,ServerGroupAntiAffinityFilter,DifferentHostFilter,SameHostFilter'
