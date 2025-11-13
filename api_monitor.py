@@ -103,8 +103,8 @@ class APIMonitor:
             
             # Common OpenStack API log patterns
             patterns = [
-                # Pattern 1: Standard OpenStack format with timing
-                r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+).*?"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^"]+)"\s+status:\s+(\d+)\s+len:\s+\d+\s+time:\s+([\d.]+)',
+                # Pattern 1: Standard OpenStack format with timing (handles optional microversion field)
+                r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+).*?"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^"]+)"\s+status:\s+(\d+)\s+len:\s+\d+.*?time:\s+([\d.]+)',
                 # Pattern 2: Apache access log with timing in seconds at end
                 r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+).*?(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\S+)\s+.*?\s+(\d{3})\s+([\d.]+)',
                 # Pattern 3: Simpler format with timing
@@ -113,10 +113,17 @@ class APIMonitor:
                 r'\[(\d{2}/\w+/\d{4}:\d{2}:\d{2}:\d{2})\s+[+\-]\d{4}\]\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\S+)\s+HTTP/[\d.]+"\s+(\d{3})',
             ]
             
+            line_count = 0
+            matched_count = 0
             for line in logs.split('\n'):
+                # Look for lines that might be API requests
+                if any(method in line.upper() for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']):
+                    line_count += 1
+                    
                 for pattern_idx, pattern in enumerate(patterns):
                     match = re.search(pattern, line, re.IGNORECASE)
                     if match:
+                        matched_count += 1
                         try:
                             timestamp_str = match.group(1)
                             method = match.group(2).upper()
@@ -172,7 +179,13 @@ class APIMonitor:
                 with_timing = sum(1 for r in requests if r['response_time'] > 0)
                 logger.info(f"Parsed {len(requests)} API requests from {pod_name} ({with_timing} with timing data)")
             else:
-                logger.warning(f"No API requests found in {pod_name} logs (checked {len(logs.split(chr(10)))} lines)")
+                logger.warning(f"No API requests found in {pod_name} logs (checked {len(logs.split(chr(10)))} lines, {line_count} HTTP method lines, {matched_count} pattern matches)")
+                # Log first few unmatched lines for debugging
+                if line_count > 0:
+                    sample_lines = [l for l in logs.split('\n') if any(m in l.upper() for m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])][:3]
+                    logger.debug(f"Sample unmatched lines from {pod_name}:")
+                    for i, sample in enumerate(sample_lines, 1):
+                        logger.debug(f"  {i}. {sample[:200]}")
             
             return requests
             
