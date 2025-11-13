@@ -532,17 +532,43 @@ class CSVExporter:
             
             # Check if we have timing data
             has_timing = (df['response_time'] > 0).any()
-            timing_note = "" if has_timing else " (Timing data not available)"
             
             # Check if there are errors to show
             has_errors = (df['is_error'] == True).any()
             
-            # Create figure with subplots (4 rows if errors exist, 3 otherwise)
-            if has_errors:
+            # Determine subplot layout based on timing availability and errors
+            if not has_timing:
+                # Skip response time subplot if no timing data
+                logger.info("No response time data available - skipping response time graph")
+                if has_errors:
+                    # 3 subplots: Status Codes, Error Rate, Error Table
+                    fig = make_subplots(
+                        rows=3, cols=1,
+                        subplot_titles=(
+                            'Response Code Distribution', 
+                            'Error Rate Timeline',
+                            '🔴 Error Requests (4xx/5xx) - Sorted by Status Code'
+                        ),
+                        vertical_spacing=0.10,
+                        specs=[[{"type": "bar"}],
+                               [{"secondary_y": False}],
+                               [{"type": "table"}]]
+                    )
+                else:
+                    # 2 subplots: Status Codes, Error Rate
+                    fig = make_subplots(
+                        rows=2, cols=1,
+                        subplot_titles=('Response Code Distribution', 'Error Rate Timeline'),
+                        vertical_spacing=0.15,
+                        specs=[[{"type": "bar"}],
+                               [{"secondary_y": False}]]
+                    )
+            elif has_errors:
+                # 4 subplots: Response Times, Status Codes, Error Rate, Error Table
                 fig = make_subplots(
                     rows=4, cols=1,
                     subplot_titles=(
-                        f'API Response Times Over Time{timing_note}', 
+                        'API Response Times Over Time', 
                         'Response Code Distribution', 
                         'Error Rate Timeline',
                         '🔴 Error Requests (4xx/5xx) - Sorted by Status Code'
@@ -554,36 +580,41 @@ class CSVExporter:
                            [{"type": "table"}]]
                 )
             else:
+                # 3 subplots: Response Times, Status Codes, Error Rate
                 fig = make_subplots(
                     rows=3, cols=1,
-                    subplot_titles=(f'API Response Times Over Time{timing_note}', 'Response Code Distribution', 'Error Rate Timeline'),
+                    subplot_titles=('API Response Times Over Time', 'Response Code Distribution', 'Error Rate Timeline'),
                     vertical_spacing=0.12,
                     specs=[[{"secondary_y": False}],
                            [{"type": "bar"}],
                            [{"secondary_y": False}]]
                 )
             
-            # Plot 1: Response times by service
-            for service in df['service'].unique():
-                service_data = df[df['service'] == service]
-                fig.add_trace(
-                    go.Scatter(
-                        x=service_data['timestamp'],
-                        y=service_data['response_time'],
-                        mode='markers',
-                        name=f'{service.capitalize()} API',
-                        marker=dict(
-                            size=6,
-                            color=service_data['status_code'],
-                            colorscale='RdYlGn_r',  # Red for high codes, green for low
-                            showscale=True,
-                            colorbar=dict(title="Status Code", x=1.15)
+            # Plot 1: Response times by service (skip if no timing data)
+            current_row = 1
+            if has_timing:
+                for service in df['service'].unique():
+                    service_data = df[df['service'] == service]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=service_data['timestamp'],
+                            y=service_data['response_time'],
+                            mode='markers',
+                            name=f'{service.capitalize()} API',
+                            marker=dict(
+                                size=6,
+                                color=service_data['status_code'],
+                                colorscale='RdYlGn_r',  # Red for high codes, green for low
+                                showscale=True,
+                                colorbar=dict(title="Status Code", x=1.15)
+                            ),
+                            hovertemplate='<b>%{text}</b><br>Endpoint: %{customdata}<br>Time: %{y:.3f}s<br>Status: %{marker.color}<extra></extra>',
+                            text=[f"{row['service']}: {row['method']}" for _, row in service_data.iterrows()],
+                            customdata=service_data['endpoint'].values  # Add endpoint to hover
                         ),
-                        hovertemplate='<b>%{text}</b><br>Time: %{y:.3f}s<br>Status: %{marker.color}<extra></extra>',
-                        text=[f"{row['method']} {row['endpoint']}" for _, row in service_data.iterrows()]
-                    ),
-                    row=1, col=1
-                )
+                        row=1, col=1
+                    )
+                current_row += 1
             
             # Plot 2: Status code distribution
             status_counts = df['status_code'].value_counts().sort_index()
@@ -598,8 +629,9 @@ class CSVExporter:
                     showlegend=False,
                     hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
                 ),
-                row=2, col=1
+                row=current_row, col=1
             )
+            current_row += 1
             
             # Plot 3: Error rate over time (sliding window)
             # Group by time buckets (1-minute intervals)
@@ -610,6 +642,7 @@ class CSVExporter:
             error_rate.columns = ['errors', 'total']
             error_rate['error_rate'] = (error_rate['errors'] / error_rate['total'] * 100).fillna(0)
             
+            error_rate_row = current_row
             fig.add_trace(
                 go.Scatter(
                     x=error_rate.index,
@@ -621,7 +654,7 @@ class CSVExporter:
                     fillcolor='rgba(255, 0, 0, 0.1)',
                     hovertemplate='<b>%{x}</b><br>Error Rate: %{y:.1f}%<extra></extra>'
                 ),
-                row=3, col=1
+                row=error_rate_row, col=1
             )
             
             # Add individual error points with endpoint details
@@ -652,13 +685,14 @@ class CSVExporter:
                             symbol='x',
                             line=dict(width=1, color='white')
                         ),
-                        text=[f"{row['service']}: {row['method']} {row['endpoint']}<br>Status: {row['status_code']}" 
+                        text=[f"{row['service']}: {row['method']}<br>Endpoint: {row['endpoint']}<br>Status: {row['status_code']}" 
                               for _, row in error_requests.iterrows()],
                         hovertemplate='<b>%{text}</b><br>Time: %{x}<extra></extra>',
                         showlegend=True
                     ),
-                    row=3, col=1
+                    row=error_rate_row, col=1
                 )
+            current_row += 1
             
             # Plot 4: Error details table (if errors exist)
             if has_errors:
@@ -695,26 +729,39 @@ class CSVExporter:
                             height=25
                         )
                     ),
-                    row=4, col=1
+                    row=current_row, col=1
                 )
             
             # Update layout
-            graph_height = 1300 if has_errors else 1000
+            # Calculate height based on number of subplots
+            if not has_timing and not has_errors:
+                graph_height = 700  # 2 plots
+            elif not has_timing and has_errors:
+                graph_height = 1100  # 3 plots
+            elif has_timing and not has_errors:
+                graph_height = 1000  # 3 plots
+            else:
+                graph_height = 1300  # 4 plots
+            
             fig.update_layout(
                 height=graph_height,
                 title_text="API Performance Analysis",
                 showlegend=True
             )
             
-            # Update axes
-            fig.update_xaxes(title_text="Time", row=1, col=1)
-            fig.update_yaxes(title_text="Response Time (seconds)", row=1, col=1)
+            # Update axes (dynamically based on which plots are shown)
+            axis_row = 1
+            if has_timing:
+                fig.update_xaxes(title_text="Time", row=axis_row, col=1)
+                fig.update_yaxes(title_text="Response Time (seconds)", row=axis_row, col=1)
+                axis_row += 1
             
-            fig.update_xaxes(title_text="HTTP Status Code", row=2, col=1)
-            fig.update_yaxes(title_text="Request Count", row=2, col=1)
+            fig.update_xaxes(title_text="HTTP Status Code", row=axis_row, col=1)
+            fig.update_yaxes(title_text="Request Count", row=axis_row, col=1)
+            axis_row += 1
             
-            fig.update_xaxes(title_text="Time", row=3, col=1)
-            fig.update_yaxes(title_text="Error Rate (%)", row=3, col=1)
+            fig.update_xaxes(title_text="Time", row=axis_row, col=1)
+            fig.update_yaxes(title_text="Error Rate (%)", row=axis_row, col=1)
             
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

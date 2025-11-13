@@ -425,10 +425,31 @@ def main():
         logger.info("\nAnalyzing API pod logs...")
         logger.info(f"Filtering API logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         try:
+            # Detect which service is being tested from CR filenames
+            service_filter = None
+            if config['cr_files']:
+                # Check CR filenames for service names
+                cr_file_str = ' '.join(config['cr_files']).lower()
+                if 'octavia' in cr_file_str:
+                    service_filter = 'octavia'
+                elif 'designate' in cr_file_str:
+                    service_filter = 'designate'
+                elif 'neutron' in cr_file_str:
+                    service_filter = 'neutron'
+                elif 'nova' in cr_file_str:
+                    service_filter = 'nova'
+                elif 'cinder' in cr_file_str:
+                    service_filter = 'cinder'
+                elif 'glance' in cr_file_str:
+                    service_filter = 'glance'
+                
+                if service_filter:
+                    logger.info(f"Detected test service from CR files: {service_filter}")
+            
             # Use namespace from config, default to 'openstack'
             namespace = config.get('namespace', 'openstack')
             api_monitor = APIMonitor(namespace=namespace)
-            api_data = api_monitor.analyze_all_api_pods(since_time=test_start_time)
+            api_data = api_monitor.analyze_all_api_pods(since_time=test_start_time, service_filter=service_filter)
             
             if api_data.get('total_requests', 0) > 0:
                 # Export API requests to CSV

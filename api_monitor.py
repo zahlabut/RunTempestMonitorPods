@@ -203,13 +203,15 @@ class APIMonitor:
             logger.error(f"Error parsing logs for {pod_name}: {e}")
             return []
     
-    def analyze_all_api_pods(self, since_time: Optional[datetime] = None) -> Dict:
+    def analyze_all_api_pods(self, since_time: Optional[datetime] = None, service_filter: Optional[str] = None) -> Dict:
         """
         Analyze logs from all detected API pods.
         
         Args:
             since_time: Test start time - REQUIRED for accurate analysis.
                        Only analyzes logs from this time onwards to exclude unrelated traffic.
+            service_filter: Only analyze this specific service (e.g., 'octavia', 'designate').
+                           If None, analyzes all API pods.
         
         Returns:
             Dictionary with analysis results (may have 0 requests if since_time not provided)
@@ -223,6 +225,15 @@ class APIMonitor:
                 'requests': [],
                 'pods_analyzed': []
             }
+        
+        # Filter pods by service if specified
+        if service_filter:
+            filtered_pods = [p for p in api_pods if p['service'] == service_filter]
+            if filtered_pods:
+                logger.info(f"Filtering API analysis to service: {service_filter}")
+                api_pods = filtered_pods
+            else:
+                logger.warning(f"No API pods found for service '{service_filter}', analyzing all pods")
         
         all_requests = []
         pods_analyzed = []
