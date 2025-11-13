@@ -422,7 +422,9 @@ def main():
         api_csv_file = ""
         logger.info("\nAnalyzing API pod logs...")
         try:
-            api_monitor = APIMonitor(namespace=config['namespace'])
+            # Use namespace from config, default to 'openstack'
+            namespace = config.get('namespace', 'openstack')
+            api_monitor = APIMonitor(namespace=namespace)
             api_data = api_monitor.analyze_all_api_pods()
             
             if api_data.get('total_requests', 0) > 0:
