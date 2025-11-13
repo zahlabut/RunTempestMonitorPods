@@ -378,8 +378,10 @@ def main():
         graph_format=config['output']['graph_format']
     )
     
-    # Calculate end time
-    end_time = datetime.now() + timedelta(hours=config['time_to_run_hours'])
+    # Calculate start and end times
+    test_start_time = datetime.now()
+    end_time = test_start_time + timedelta(hours=config['time_to_run_hours'])
+    logger.info(f"Test execution started at: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"Will run tests until: {end_time}")
     
     # Start pod monitoring in background thread
@@ -421,11 +423,12 @@ def main():
         api_graph_file = ""
         api_csv_file = ""
         logger.info("\nAnalyzing API pod logs...")
+        logger.info(f"Filtering API logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         try:
             # Use namespace from config, default to 'openstack'
             namespace = config.get('namespace', 'openstack')
             api_monitor = APIMonitor(namespace=namespace)
-            api_data = api_monitor.analyze_all_api_pods()
+            api_data = api_monitor.analyze_all_api_pods(since_time=test_start_time)
             
             if api_data.get('total_requests', 0) > 0:
                 # Export API requests to CSV

@@ -77,13 +77,14 @@ class APIMonitor:
             logger.error(f"Error detecting API pods: {e}")
             return []
     
-    def parse_api_logs(self, pod_name: str, service: str) -> List[Dict]:
+    def parse_api_logs(self, pod_name: str, service: str, since_time: Optional[datetime] = None) -> List[Dict]:
         """
         Parse API logs from a pod to extract request information.
         
         Args:
             pod_name: Name of the API pod
             service: Service name (e.g., 'octavia', 'designate')
+            since_time: Only parse logs from this time onwards (filters out old logs)
             
         Returns:
             List of request dictionaries
@@ -91,8 +92,17 @@ class APIMonitor:
         requests = []
         
         try:
-            # Get pod logs
-            cmd = ["oc", "logs", pod_name, "-n", self.namespace, "--tail=10000"]
+            # Get pod logs - use time-based filtering if start time provided
+            if since_time:
+                # Format: RFC3339 timestamp (e.g., "2025-11-13T10:00:00Z")
+                since_str = since_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                cmd = ["oc", "logs", pod_name, "-n", self.namespace, f"--since-time={since_str}"]
+                logger.debug(f"Getting logs for {pod_name} since {since_str}")
+            else:
+                # Fallback to tail if no start time provided
+                cmd = ["oc", "logs", pod_name, "-n", self.namespace, "--tail=10000"]
+                logger.debug(f"Getting last 10000 log lines for {pod_name}")
+            
             result = subprocess.run(cmd, capture_output=True, text=True, check=False)
             
             if result.returncode != 0:
@@ -193,9 +203,12 @@ class APIMonitor:
             logger.error(f"Error parsing logs for {pod_name}: {e}")
             return []
     
-    def analyze_all_api_pods(self) -> Dict:
+    def analyze_all_api_pods(self, since_time: Optional[datetime] = None) -> Dict:
         """
         Analyze logs from all detected API pods.
+        
+        Args:
+            since_time: Only analyze logs from this time onwards (test start time)
         
         Returns:
             Dictionary with analysis results
@@ -218,7 +231,7 @@ class APIMonitor:
             service = pod_info['service']
             
             logger.info(f"Analyzing API logs for {pod_name}...")
-            requests = self.parse_api_logs(pod_name, service)
+            requests = self.parse_api_logs(pod_name, service, since_time=since_time)
             
             if requests:
                 all_requests.extend(requests)
