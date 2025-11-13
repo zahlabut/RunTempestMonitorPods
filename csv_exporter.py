@@ -966,7 +966,10 @@ class CSVExporter:
         tests_passed = test_summary.get('tests_passed', 0)
         tests_failed = test_summary.get('tests_failed', 0)
         tests_skipped = test_summary.get('tests_skipped', 0)
-        success_rate = (tests_passed / total_tests * 100) if total_tests > 0 else 0
+        
+        # Calculate success rate excluding skipped tests (skipped ≠ failed)
+        tests_executed = tests_passed + tests_failed
+        success_rate = (tests_passed / tests_executed * 100) if tests_executed > 0 else 0
         
         # Generate HTML content
         html_content = f"""<!DOCTYPE html>
@@ -1194,7 +1197,7 @@ class CSVExporter:
             <div class="stat-card">
                 <div class="stat-value">{success_rate:.1f}%</div>
                 <div class="stat-label">Success Rate</div>
-                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Passed / Total tests</div>
+                <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">Passed / (Passed + Failed)</div>
             </div>
         </section>
 """
