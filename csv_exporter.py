@@ -615,7 +615,7 @@ class CSVExporter:
                     x=error_rate.index,
                     y=error_rate['error_rate'],
                     mode='lines+markers',
-                    name='Error Rate',
+                    name='Error Rate %',
                     line=dict(color='red', width=2),
                     fill='tozeroy',
                     fillcolor='rgba(255, 0, 0, 0.1)',
@@ -623,6 +623,42 @@ class CSVExporter:
                 ),
                 row=3, col=1
             )
+            
+            # Add individual error points with endpoint details
+            if has_errors:
+                error_requests = df[df['is_error'] == True].copy()
+                
+                # Calculate Y-position for error markers (slightly above the line)
+                # Map each error to its time bucket's error rate + offset
+                error_requests['time_bucket'] = error_requests['timestamp'].dt.floor('1min')
+                error_requests = error_requests.merge(
+                    error_rate[['error_rate']], 
+                    left_on='time_bucket', 
+                    right_index=True, 
+                    how='left'
+                )
+                
+                # Add markers for individual errors
+                fig.add_trace(
+                    go.Scatter(
+                        x=error_requests['timestamp'],
+                        y=error_requests['error_rate'] + 2,  # Offset above the line
+                        mode='markers',
+                        name='Error Details',
+                        marker=dict(
+                            size=8,
+                            color=error_requests['status_code'],
+                            colorscale=[[0, 'orange'], [0.5, 'red'], [1, 'darkred']],
+                            symbol='x',
+                            line=dict(width=1, color='white')
+                        ),
+                        text=[f"{row['service']}: {row['method']} {row['endpoint']}<br>Status: {row['status_code']}" 
+                              for _, row in error_requests.iterrows()],
+                        hovertemplate='<b>%{text}</b><br>Time: %{x}<extra></extra>',
+                        showlegend=True
+                    ),
+                    row=3, col=1
+                )
             
             # Plot 4: Error details table (if errors exist)
             if has_errors:
