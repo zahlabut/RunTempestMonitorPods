@@ -1113,6 +1113,15 @@ class CSVExporter:
             word-wrap: break-word;
         }}
         
+        .keyword-highlight {{
+            background: #dc3545;
+            color: #ffffff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }}
+        
         .service-summary {{
             background: #e3f2fd;
             padding: 20px;
@@ -1267,7 +1276,7 @@ class CSVExporter:
                         <span><strong>First Seen:</strong> {error.get('first_seen', 'N/A')}</span>
                         <span><strong>Last Seen:</strong> {error.get('last_seen', 'N/A')}</span>
                     </div>
-                    <div class="error-text">{self._escape_html(error['error_text'])}</div>
+                    <div class="error-text">{self._highlight_keywords(self._escape_html(error['error_text']))}</div>
                 </div>
 """
                 
@@ -1303,6 +1312,35 @@ class CSVExporter:
                 .replace('>', '&gt;')
                 .replace('"', '&quot;')
                 .replace("'", '&#39;'))
+    
+    def _highlight_keywords(self, text: str) -> str:
+        """
+        Highlight critical keywords in error text with red background.
+        
+        Keywords: error, traceback, critical, failed, exception, timeout, refused, denied, etc.
+        
+        Args:
+            text: HTML-escaped text
+        
+        Returns:
+            Text with keywords wrapped in <span class="keyword-highlight">
+        """
+        keywords = [
+            'error', 'critical', 'failed', 'failure', 'exception',
+            'traceback', 'timeout', 'timed out', 'refused', 'denied',
+            'invalid', 'not found', 'cannot', 'unable', 'forbidden',
+            'unauthorized', 'fatal', 'abort', 'aborted', 'panic',
+            'killed', 'segfault', 'crash', 'broken', 'corrupt'
+        ]
+        
+        import re
+        for keyword in keywords:
+            # Use word boundaries to match whole words only, case-insensitive
+            pattern = r'\b(' + re.escape(keyword) + r')\b'
+            replacement = r'<span class="keyword-highlight">\1</span>'
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        
+        return text
     
     def _write_graph_with_back_button(self, file_path: str, plotly_html: str, title: str = "Graph"):
         """
