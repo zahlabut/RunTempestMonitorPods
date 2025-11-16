@@ -163,14 +163,13 @@ class ErrorCollector:
         """
         Extract complete error blocks from log text, including full Python tracebacks.
         
-        Python tracebacks have this structure:
-        Traceback (most recent call last):
-          File "...", line X, in func
-            code
-        ExceptionType: message
-        ERROR module [req-id] context
+        OpenStack logs often have this format where EVERY line is prefixed with ERROR:
+        2025-11-16 14:24:36.475 17 ERROR designate.module Traceback (most recent call last):
+        2025-11-16 14:24:36.475 17 ERROR designate.module   File "...", line X, in func
+        2025-11-16 14:24:36.475 17 ERROR designate.module     code
+        2025-11-16 14:24:36.475 17 ERROR designate.module ExceptionType: message
         
-        This method captures the ENTIRE block.
+        This method captures the ENTIRE traceback block as ONE error.
         
         Args:
             log_text: Raw log text
@@ -187,81 +186,144 @@ class ErrorCollector:
         while i < len(lines):
             line = lines[i]
             
-            # Check if line contains ERROR or CRITICAL
-            if re.search(r'\b(ERROR|CRITICAL)\b', line, re.IGNORECASE):
-                # Extract timestamp and severity from the ERROR line
+            # Look for lines that contain "Traceback (most recent call last)" - this is the START of an error block
+            # OR lines with ERROR/CRITICAL that are NOT part of a traceback (standalone errors)
+            if 'Traceback (most recent call last)' in line:
+                # Found the start of a traceback - capture the entire block
+                error_block = [line]
+                
+                # Extract timestamp and base pattern from first line
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
                 timestamp = timestamp_match.group(1) if timestamp_match else None
                 severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
                 
-                # Look BACKWARDS to find the start of the traceback
-                start_index = i
-                traceback_found = False
+                # Extract the module prefix pattern (e.g., "ERROR designate.objects.adapters.base")
+                # to identify continuation lines
+                prefix_match = re.search(r'(ERROR|CRITICAL)\s+[\w\.]+', line, re.IGNORECASE)
+                module_prefix = prefix_match.group(0) if prefix_match else None
                 
-                # Search backwards up to 100 lines to find "Traceback (most recent call last):"
-                for k in range(i - 1, max(i - 100, -1), -1):
-                    prev_line = lines[k]
-                    
-                    # If we hit a line with a timestamp (new log entry), stop searching
-                    if k < i - 1 and re.search(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', prev_line):
-                        break
-                    
-                    # Found the start of a traceback
-                    if 'Traceback (most recent call last)' in prev_line:
-                        start_index = k
-                        traceback_found = True
-                        break
-                
-                # Build the error block starting from the traceback (or ERROR line if no traceback)
-                error_block = []
-                
-                # Add all lines from start_index to current line
-                for idx in range(start_index, i + 1):
-                    error_block.append(lines[idx])
-                
-                # Look FORWARD to capture continuation lines (stack traces, exception details, etc.)
+                # Capture all subsequent lines that are part of this traceback
                 j = i + 1
-                max_lines = 200  # Allow up to 200 lines for very large tracebacks
+                max_lines = 200
                 
                 while j < len(lines) and j < i + max_lines:
                     next_line = lines[j]
                     
-                    # Stop if we hit a new log entry (line with timestamp at the start)
-                    # But allow lines that have timestamps in the middle (like Apache logs)
+                    # If empty line, check if next line is a new log entry
+                    if not next_line.strip():
+                        if j + 1 < len(lines):
+                            peek_line = lines[j + 1]
+                            # If next line is a new timestamp + different pattern, stop
+                            if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', peek_line):
+                                # Check if it's the same module continuing or a new entry
+                                if module_prefix and module_prefix not in peek_line:
+                                    break
+                        j += 1
+                        continue
+                    
+                    # Check if this line is part of the same error block
+                    # Same module prefix OR continuation line (starts with same timestamp + module)
+                    is_continuation = False
+                    
+                    if timestamp and timestamp in next_line:
+                        # Same timestamp - likely same error
+                        if module_prefix and module_prefix in next_line:
+                            is_continuation = True
+                        # Also capture lines with same timestamp but different format (e.g., HTTP logs after error)
+                        elif not re.search(r'(INFO|DEBUG|WARNING)\s', next_line, re.IGNORECASE):
+                            is_continuation = True
+                    elif next_line.startswith('    ') or next_line.startswith('\t'):
+                        # Indented line (traceback continuation)
+                        is_continuation = True
+                    elif re.match(r'^\s+File\s+"', next_line):
+                        # Stack frame line
+                        is_continuation = True
+                    
+                    if is_continuation:
+                        error_block.append(next_line)
+                        j += 1
+                    else:
+                        # Check if this is a new log entry (different timestamp + module)
+                        if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', next_line):
+                            # New log entry - stop here
+                            break
+                        else:
+                            # Might be continuation without timestamp
+                            error_block.append(next_line)
+                            j += 1
+                
+                error_text = '\n'.join(error_block)
+                
+                if len(error_block) > 0:
+                    errors.append({
+                        'pod_name': pod_name,
+                        'service': service,
+                        'timestamp': timestamp,
+                        'severity': severity,
+                        'error_text': error_text,
+                        'normalized_text': self._normalize_error_text(error_text),
+                        'has_traceback': True
+                    })
+                    
+                    logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
+                
+                # Skip all processed lines
+                i = j
+                
+            elif re.search(r'\b(ERROR|CRITICAL)\b', line, re.IGNORECASE):
+                # This is an ERROR/CRITICAL line but NOT part of a traceback
+                # Only capture if it's NOT a traceback fragment (no "File", no indentation at start of content)
+                
+                # Extract the actual content after the log prefix
+                content_match = re.search(r'(ERROR|CRITICAL)\s+[\w\.]+\s+(.*)', line, re.IGNORECASE)
+                if content_match:
+                    content = content_match.group(2).strip()
+                    
+                    # Skip if this looks like a traceback fragment
+                    if (content.startswith('File "') or 
+                        content.startswith('Traceback') or
+                        re.match(r'^\s+(File|return|raise|def|class)', content)):
+                        i += 1
+                        continue
+                
+                # This is a standalone error (not a traceback)
+                timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
+                timestamp = timestamp_match.group(1) if timestamp_match else None
+                severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
+                
+                error_block = [line]
+                
+                # Look for continuation lines (same timestamp, no ERROR prefix)
+                j = i + 1
+                while j < len(lines) and j < i + 50:
+                    next_line = lines[j]
+                    
+                    # Stop at next log entry
                     if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', next_line):
                         break
                     
-                    # Stop if we hit an empty line followed by a timestamp (common pattern)
+                    # Stop at empty line
                     if not next_line.strip():
-                        # Check if next line is a new log entry
-                        if j + 1 < len(lines) and re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', lines[j + 1]):
-                            break
+                        break
                     
-                    # This is a continuation line - add it
                     error_block.append(next_line)
                     j += 1
                 
                 error_text = '\n'.join(error_block)
                 
-                # Skip if this is just a single line with no meaningful content
-                if len(error_block) < 1 or (len(error_block) == 1 and len(error_block[0]) < 20):
-                    i += 1
-                    continue
+                if len(error_block) > 0 and len(error_text) > 20:
+                    errors.append({
+                        'pod_name': pod_name,
+                        'service': service,
+                        'timestamp': timestamp,
+                        'severity': severity,
+                        'error_text': error_text,
+                        'normalized_text': self._normalize_error_text(error_text),
+                        'has_traceback': False
+                    })
+                    
+                    logger.debug(f"Extracted standalone error from {pod_name}")
                 
-                errors.append({
-                    'pod_name': pod_name,
-                    'service': service,
-                    'timestamp': timestamp,
-                    'severity': severity,
-                    'error_text': error_text,
-                    'normalized_text': self._normalize_error_text(error_text),
-                    'has_traceback': traceback_found
-                })
-                
-                # Debug logging
-                logger.debug(f"Extracted {len(error_block)}-line error block (traceback: {traceback_found}) from {pod_name}")
-                
-                # Skip processed lines
                 i = j
             else:
                 i += 1
