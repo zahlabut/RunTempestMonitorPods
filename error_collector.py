@@ -58,6 +58,9 @@ class ErrorCollector:
         
         # Similarity threshold for fuzzy matching (0-100)
         self.similarity_threshold = 85
+        
+        # Number of context lines to capture before an error (for debugging context)
+        self.context_lines_before = 10
     
     def detect_openstack_pods(self) -> List[Dict]:
         """
@@ -196,6 +199,50 @@ class ErrorCollector:
         """
         return SequenceMatcher(None, text1, text2).ratio() * 100
     
+    def _extract_context_lines(self, lines: List[str], error_line_index: int) -> List[str]:
+        """
+        Extract context lines before an error for debugging.
+        
+        Captures up to N lines before the error, but stops at:
+        - Previous ERROR/CRITICAL line (don't mix errors)
+        - Empty line followed by a gap (log block separator)
+        - Beginning of log
+        
+        Args:
+            lines: All log lines
+            error_line_index: Index of the error line
+        
+        Returns:
+            List of context lines (may be empty)
+        """
+        context = []
+        start_index = max(0, error_line_index - self.context_lines_before)
+        
+        for idx in range(error_line_index - 1, start_index - 1, -1):
+            if idx < 0:
+                break
+            
+            line = lines[idx]
+            
+            # Stop if we hit another ERROR/CRITICAL (don't mix errors)
+            if re.search(r'\b(ERROR|CRITICAL)\b', line, re.IGNORECASE):
+                # Check if it's a real error line (not just a string containing "error")
+                if re.search(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}.*?(ERROR|CRITICAL)', line, re.IGNORECASE):
+                    break
+            
+            # Stop at empty lines followed by another empty line (log block separator)
+            if not line.strip():
+                if idx > 0 and not lines[idx - 1].strip():
+                    break
+            
+            context.insert(0, line)
+        
+        # Add a separator comment to distinguish context from actual error
+        if context:
+            context.append("--- [Context ends, error begins below] ---")
+        
+        return context
+    
     def _extract_error_blocks(self, log_text: str, pod_name: str, service: str, pod_type: str = 'openstack') -> List[Dict]:
         """
         Extract complete error blocks from log text, including full Python tracebacks.
@@ -227,8 +274,11 @@ class ErrorCollector:
             # Look for lines that contain "Traceback (most recent call last)" - this is the START of an error block
             # OR lines with ERROR/CRITICAL that are NOT part of a traceback (standalone errors)
             if 'Traceback (most recent call last)' in line:
-                # Found the start of a traceback - capture the entire block
-                error_block = [line]
+                # Found the start of a traceback - capture context lines before the error
+                context_lines = self._extract_context_lines(lines, i)
+                
+                # Start error block with context, then the traceback line
+                error_block = context_lines + [line]
                 
                 # Extract timestamp and base pattern from first line
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
@@ -304,7 +354,11 @@ class ErrorCollector:
                         'has_traceback': True
                     })
                     
-                    logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
+                    context_count = len(context_lines)
+                    if context_count > 0:
+                        logger.debug(f"Extracted {len(error_block)}-line traceback block ({context_count} context lines) from {pod_name}")
+                    else:
+                        logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
                 
                 # Skip all processed lines
                 i = j
@@ -326,11 +380,15 @@ class ErrorCollector:
                         continue
                 
                 # This is a standalone error (not a traceback)
+                # Capture context lines before the error
+                context_lines = self._extract_context_lines(lines, i)
+                
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
                 timestamp = timestamp_match.group(1) if timestamp_match else None
                 severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
                 
-                error_block = [line]
+                # Start with context, then the error line
+                error_block = context_lines + [line]
                 
                 # Look for continuation lines (same timestamp, no ERROR prefix)
                 j = i + 1
@@ -362,7 +420,11 @@ class ErrorCollector:
                         'has_traceback': False
                     })
                     
-                    logger.debug(f"Extracted standalone error from {pod_name}")
+                    context_count = len(context_lines)
+                    if context_count > 0:
+                        logger.debug(f"Extracted standalone error ({context_count} context lines) from {pod_name}")
+                    else:
+                        logger.debug(f"Extracted standalone error from {pod_name}")
                 
                 i = j
             else:
