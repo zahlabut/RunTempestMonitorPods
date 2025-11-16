@@ -1,4 +1,4 @@
-# OpenStack Tempest Test Runner with Pod Monitoring V1.6
+# OpenStack Tempest Test Runner with Pod Monitoring V1.7
 
 A Python-based tool for running OpenStack Tempest tests via OpenShift Custom Resources (CRs) with comprehensive pod monitoring and metrics collection.
 
