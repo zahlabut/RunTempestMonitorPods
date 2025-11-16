@@ -422,70 +422,73 @@ def main():
         api_data = {}
         api_graph_file = ""
         api_csv_file = ""
-        logger.info("\nAnalyzing API pod logs...")
-        logger.info(f"Filtering API logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        try:
-            # Detect which service is being tested from CR filenames
-            service_filter = None
-            if config['cr_files']:
-                # Check CR filenames for service names
-                cr_file_str = ' '.join(config['cr_files']).lower()
-                if 'octavia' in cr_file_str:
-                    service_filter = 'octavia'
-                elif 'designate' in cr_file_str:
-                    service_filter = 'designate'
-                elif 'neutron' in cr_file_str:
-                    service_filter = 'neutron'
-                elif 'nova' in cr_file_str:
-                    service_filter = 'nova'
-                elif 'cinder' in cr_file_str:
-                    service_filter = 'cinder'
-                elif 'glance' in cr_file_str:
-                    service_filter = 'glance'
+        
+        # Detect which service is being tested from CR filenames
+        service_filter = None
+        if config['cr_files']:
+            # Check CR filenames for service names
+            cr_file_str = ' '.join(config['cr_files']).lower()
+            if 'octavia' in cr_file_str:
+                service_filter = 'octavia'
+            elif 'designate' in cr_file_str:
+                service_filter = 'designate'
+            elif 'neutron' in cr_file_str:
+                service_filter = 'neutron'
+            elif 'nova' in cr_file_str:
+                service_filter = 'nova'
+            elif 'cinder' in cr_file_str:
+                service_filter = 'cinder'
+            elif 'glance' in cr_file_str:
+                service_filter = 'glance'
+        
+        # Only analyze API logs if we detected a specific service
+        if service_filter:
+            logger.info("\nAnalyzing API pod logs...")
+            logger.info(f"Detected test service from CR files: {service_filter}")
+            logger.info(f"Filtering API logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            try:
+                # Use namespace from config, default to 'openstack'
+                namespace = config.get('namespace', 'openstack')
+                api_monitor = APIMonitor(namespace=namespace)
+                api_data = api_monitor.analyze_all_api_pods(since_time=test_start_time, service_filter=service_filter)
                 
-                if service_filter:
-                    logger.info(f"Detected test service from CR files: {service_filter}")
-            
-            # Use namespace from config, default to 'openstack'
-            namespace = config.get('namespace', 'openstack')
-            api_monitor = APIMonitor(namespace=namespace)
-            api_data = api_monitor.analyze_all_api_pods(since_time=test_start_time, service_filter=service_filter)
-            
-            if api_data.get('total_requests', 0) > 0:
-                # Export API requests to CSV
-                api_csv_file = csv_exporter.export_api_requests(api_data)
-                
-                # Generate API performance graph
-                if config['output']['enable_graphs']:
-                    api_graph_file = csv_exporter.generate_api_performance_graph(api_data)
-                
-                logger.info(f"API Analysis Summary:")
-                logger.info(f"  Total Requests: {api_data['total_requests']}")
-                logger.info(f"  Error Requests: {api_data['error_requests']}")
-                logger.info(f"  Success Rate: {api_data['success_rate']:.2f}%")
-                logger.info(f"  Avg Response Time: {api_data['avg_response_time']:.3f}s")
-                
-                # Show error endpoints if any
-                if api_data['error_requests'] > 0:
-                    error_reqs = [r for r in api_data['requests'] if r['is_error']]
-                    logger.info(f"\n  🔴 Error Endpoints (HTTP 4xx/5xx):")
+                if api_data.get('total_requests', 0) > 0:
+                    # Export API requests to CSV
+                    api_csv_file = csv_exporter.export_api_requests(api_data)
                     
-                    # Group errors by endpoint and status
-                    error_summary = {}
-                    for req in error_reqs:
-                        key = (req['method'], req['endpoint'], req['status_code'])
-                        if key not in error_summary:
-                            error_summary[key] = {'count': 0, 'service': req['service']}
-                        error_summary[key]['count'] += 1
+                    # Generate API performance graph
+                    if config['output']['enable_graphs']:
+                        api_graph_file = csv_exporter.generate_api_performance_graph(api_data)
                     
-                    # Show up to 10 most common errors
-                    sorted_errors = sorted(error_summary.items(), key=lambda x: x[1]['count'], reverse=True)[:10]
-                    for (method, endpoint, status), info in sorted_errors:
-                        logger.info(f"    [{info['service']}] {method} {endpoint} → {status} ({info['count']}x)")
-            else:
-                logger.warning("No API requests found in logs")
-        except Exception as e:
-            logger.error(f"Error analyzing API logs: {e}")
+                    logger.info(f"API Analysis Summary:")
+                    logger.info(f"  Total Requests: {api_data['total_requests']}")
+                    logger.info(f"  Error Requests: {api_data['error_requests']}")
+                    logger.info(f"  Success Rate: {api_data['success_rate']:.2f}%")
+                    logger.info(f"  Avg Response Time: {api_data['avg_response_time']:.3f}s")
+                    
+                    # Show error endpoints if any
+                    if api_data['error_requests'] > 0:
+                        error_reqs = [r for r in api_data['requests'] if r['is_error']]
+                        logger.info(f"\n  🔴 Error Endpoints (HTTP 4xx/5xx):")
+                        
+                        # Group errors by endpoint and status
+                        error_summary = {}
+                        for req in error_reqs:
+                            key = (req['method'], req['endpoint'], req['status_code'])
+                            if key not in error_summary:
+                                error_summary[key] = {'count': 0, 'service': req['service']}
+                            error_summary[key]['count'] += 1
+                        
+                        # Show up to 10 most common errors
+                        sorted_errors = sorted(error_summary.items(), key=lambda x: x[1]['count'], reverse=True)[:10]
+                        for (method, endpoint, status), info in sorted_errors:
+                            logger.info(f"    [{info['service']}] {method} {endpoint} → {status} ({info['count']}x)")
+                else:
+                    logger.warning("No API requests found in logs")
+            except Exception as e:
+                logger.error(f"Error analyzing API logs: {e}")
+        else:
+            logger.info("\nSkipping API analysis (could not detect service type from CR files)")
         
         # Generate graphs and track for web report
         graph_files = []

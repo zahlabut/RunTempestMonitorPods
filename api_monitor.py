@@ -211,7 +211,8 @@ class APIMonitor:
             since_time: Test start time - REQUIRED for accurate analysis.
                        Only analyzes logs from this time onwards to exclude unrelated traffic.
             service_filter: Only analyze this specific service (e.g., 'octavia', 'designate').
-                           If None, analyzes all API pods.
+                           Should be specified to avoid mixing irrelevant API data.
+                           If None, analyzes all API pods (not recommended).
         
         Returns:
             Dictionary with analysis results (may have 0 requests if since_time not provided)
