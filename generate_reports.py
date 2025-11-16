@@ -165,6 +165,31 @@ Examples:
         skip_archiving=True  # DON'T archive existing CSV files - we need them!
     )
     
+    # CRITICAL: Override the CSV file paths with actual existing files
+    # (CSVExporter.__init__ creates paths with NEW timestamp, but we need OLD files)
+    logger.info("\nMapping existing CSV files to CSVExporter...")
+    api_csv_file = None
+    for csv_file in csv_files:
+        basename = os.path.basename(csv_file)
+        if basename.startswith("old_"):
+            continue  # Skip archived files
+        
+        if "metrics" in basename and "api_requests" not in basename:
+            csv_exporter.metrics_csv = csv_file
+            logger.info(f"  ✓ Metrics CSV: {basename}")
+        elif "results" in basename and "failed" not in basename and "execution" not in basename and "api_requests" not in basename:
+            csv_exporter.results_csv = csv_file
+            logger.info(f"  ✓ Results CSV: {basename}")
+        elif "failed_tests" in basename:
+            csv_exporter.failed_tests_csv = csv_file
+            logger.info(f"  ✓ Failed Tests CSV: {basename}")
+        elif "test_execution_times" in basename:
+            csv_exporter.test_execution_csv = csv_file
+            logger.info(f"  ✓ Test Execution Times CSV: {basename}")
+        elif "api_requests" in basename:
+            api_csv_file = csv_file
+            logger.info(f"  ✓ API Requests CSV: {basename}")
+    
     # Generate graphs
     graph_files = []
     if not args.no_graphs:
@@ -180,6 +205,36 @@ Examples:
         except Exception as e:
             logger.error(f"Error generating graphs: {e}")
             logger.warning("Continuing without graphs...")
+        
+        # Generate API performance graph if API CSV exists
+        if api_csv_file and os.path.exists(api_csv_file):
+            logger.info("\nGenerating API performance graph from CSV...")
+            try:
+                import pandas as pd
+                # Read API requests CSV
+                api_df = pd.read_csv(api_csv_file)
+                if not api_df.empty:
+                    # Convert to format expected by generate_api_performance_graph
+                    api_data = {
+                        'requests': api_df.to_dict('records'),
+                        'total_requests': len(api_df),
+                        'error_requests': len(api_df[api_df['is_error'] == True]) if 'is_error' in api_df.columns else 0,
+                        'by_service': {}
+                    }
+                    # Group by service
+                    if 'service' in api_df.columns:
+                        for service, group in api_df.groupby('service'):
+                            api_data['by_service'][service] = group.to_dict('records')
+                    
+                    api_graph = csv_exporter.generate_api_performance_graph(api_data)
+                    if api_graph:
+                        graph_files.append(api_graph)
+                        logger.info(f"  ✓ API graph: {os.path.basename(api_graph)}")
+                else:
+                    logger.warning("  API CSV is empty, skipping API graph")
+            except Exception as e:
+                logger.error(f"Error generating API graph: {e}")
+                logger.warning("Continuing without API graph...")
     else:
         logger.info("\nSkipping graph generation (--no-graphs specified)")
     
