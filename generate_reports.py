@@ -155,13 +155,14 @@ Examples:
     for csv_file in sorted(csv_files):
         logger.info(f"  - {os.path.basename(csv_file)}")
     
-    # Initialize CSV exporter (point to existing directory)
+    # Initialize CSV exporter (point to existing directory, skip archiving!)
     logger.info("\nInitializing CSV exporter...")
     csv_exporter = CSVExporter(
         results_dir=results_dir,
         csv_filename="tempest_monitoring",  # Base filename
         enable_graphs=not args.no_graphs,
-        graph_format=args.graph_format
+        graph_format=args.graph_format,
+        skip_archiving=True  # DON'T archive existing CSV files - we need them!
     )
     
     # Generate graphs

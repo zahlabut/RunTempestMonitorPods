@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class CSVExporter:
     """Exports metrics and results to CSV and generates graphs."""
     
-    def __init__(self, results_dir: str, csv_filename: str, enable_graphs: bool = True, graph_format: str = "png"):
+    def __init__(self, results_dir: str, csv_filename: str, enable_graphs: bool = True, graph_format: str = "png", skip_archiving: bool = False):
         """
         Initialize the CSV exporter.
         
@@ -32,6 +32,7 @@ class CSVExporter:
             csv_filename: Base filename for CSV (timestamp will be added)
             enable_graphs: Whether to generate graphs
             graph_format: Graph output format (png, svg, pdf)
+            skip_archiving: If True, don't archive existing files on init (for recovery script)
         """
         self.results_dir = results_dir
         self.csv_filename = csv_filename
@@ -41,8 +42,9 @@ class CSVExporter:
         # Create results directory if it doesn't exist
         os.makedirs(results_dir, exist_ok=True)
         
-        # Archive old results if any exist
-        self._archive_old_results()
+        # Archive old results if any exist (skip for recovery mode)
+        if not skip_archiving:
+            self._archive_old_results()
         
         # Generate timestamped filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
