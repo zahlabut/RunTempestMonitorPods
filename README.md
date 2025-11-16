@@ -202,6 +202,39 @@ The tool supports graceful shutdown. Press `Ctrl+C` to stop:
 - Graphs will be generated
 - Summary will be displayed
 
+### Recovery from Interrupted Runs
+
+If your test run was interrupted (connectivity issue, system crash, etc.) but CSV files were already generated, you can use the recovery script to complete the analysis:
+
+```bash
+python generate_reports.py results/
+```
+
+**What it does:**
+- ✅ Reads existing CSV files
+- ✅ Generates all graphs (pod metrics, test results, test execution times, API performance)
+- ✅ Creates web report with index.html
+- ✅ Packages everything into ZIP archive
+- ✅ Shows download command
+
+**Options:**
+```bash
+# Specify results directory
+python generate_reports.py /path/to/results
+
+# Skip graph generation (web report + archive only)
+python generate_reports.py results/ --no-graphs
+
+# Generate SVG images instead of PNG
+python generate_reports.py results/ --graph-format svg
+```
+
+**Use Cases:**
+- 🔌 Test run interrupted due to connectivity loss
+- 💥 System crashed before graphs were generated
+- 🔄 Want to regenerate graphs with different format
+- 📊 Need to create web report from old CSV files
+
 ## Output
 
 ### Automatic Archiving
