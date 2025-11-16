@@ -306,7 +306,10 @@ class CSVExporter:
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             graph_file = os.path.join(self.results_dir, f"pod_metrics_{timestamp}.html")
-            fig.write_html(graph_file)
+            
+            # Generate HTML with back button
+            html_content = fig.to_html(include_plotlyjs='cdn', full_html=False)
+            self._write_graph_with_back_button(graph_file, html_content, "Pod Metrics")
             
             # Also save as static image
             if self.graph_format in ['png', 'svg', 'pdf']:
@@ -412,7 +415,10 @@ class CSVExporter:
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             graph_file = os.path.join(self.results_dir, f"test_results_{timestamp}.html")
-            fig.write_html(graph_file)
+            
+            # Generate HTML with back button
+            html_content = fig.to_html(include_plotlyjs='cdn', full_html=False)
+            self._write_graph_with_back_button(graph_file, html_content, "Test Results")
             
             # Also save as static image
             if self.graph_format in ['png', 'svg', 'pdf']:
@@ -495,7 +501,10 @@ class CSVExporter:
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             graph_file = os.path.join(self.results_dir, f"test_execution_times_{timestamp}.html")
-            fig.write_html(graph_file)
+            
+            # Generate HTML with back button
+            html_content = fig.to_html(include_plotlyjs='cdn', full_html=False)
+            self._write_graph_with_back_button(graph_file, html_content, "Test Execution Times")
             
             # Also save as static image
             if self.graph_format in ['png', 'svg', 'pdf']:
@@ -768,7 +777,10 @@ class CSVExporter:
             # Save graph
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             graph_file = os.path.join(self.results_dir, f"api_performance_{timestamp}.html")
-            fig.write_html(graph_file)
+            
+            # Generate HTML with back button
+            html_content = fig.to_html(include_plotlyjs='cdn', full_html=False)
+            self._write_graph_with_back_button(graph_file, html_content, "API Performance")
             
             # Also save as static image
             if self.graph_format in ['png', 'svg', 'pdf']:
@@ -1266,7 +1278,7 @@ class CSVExporter:
             html_content += """
         </div>
         
-        <a href="index.html" class="back-link">← Back to Summary</a>
+        <a href="../index.html" class="back-link">← Back to Summary</a>
     </div>
 </body>
 </html>
@@ -1291,6 +1303,92 @@ class CSVExporter:
                 .replace('>', '&gt;')
                 .replace('"', '&quot;')
                 .replace("'", '&#39;'))
+    
+    def _write_graph_with_back_button(self, file_path: str, plotly_html: str, title: str = "Graph"):
+        """
+        Write a Plotly graph HTML with a 'Back to Summary' button.
+        
+        Args:
+            file_path: Path to save the HTML file
+            plotly_html: Plotly-generated HTML content (without full HTML wrapper)
+            title: Page title
+        """
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Tempest Test Report</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }}
+        
+        .container {{
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }}
+        
+        .header {{
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }}
+        
+        .header h1 {{
+            color: #333;
+            font-size: 2em;
+            margin: 0;
+        }}
+        
+        .back-link {{
+            display: inline-block;
+            margin-top: 30px;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }}
+        
+        .back-link:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }}
+        
+        .graph-container {{
+            margin: 20px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{title}</h1>
+        </div>
+        
+        <div class="graph-container">
+            {plotly_html}
+        </div>
+        
+        <a href="../index.html" class="back-link">← Back to Summary</a>
+    </div>
+</body>
+</html>
+"""
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(full_html)
     
     def _parse_cpu_value(self, cpu_str: str) -> float:
         """Parse CPU value from string (e.g., '100m' -> 100)."""
