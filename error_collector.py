@@ -59,8 +59,9 @@ class ErrorCollector:
         # Similarity threshold for fuzzy matching (0-100)
         self.similarity_threshold = 85
         
-        # Number of context lines to capture before an error (for debugging context)
-        self.context_lines_before = 10
+        # Number of context lines to capture before and after an error (for debugging context)
+        self.context_lines_before = 5
+        self.context_lines_after = 5
     
     def detect_openstack_pods(self) -> List[Dict]:
         """
@@ -199,7 +200,7 @@ class ErrorCollector:
         """
         return SequenceMatcher(None, text1, text2).ratio() * 100
     
-    def _extract_context_lines(self, lines: List[str], error_line_index: int) -> List[str]:
+    def _extract_context_before(self, lines: List[str], error_line_index: int) -> List[str]:
         """
         Extract context lines before an error for debugging.
         
@@ -239,7 +240,51 @@ class ErrorCollector:
         
         # Add a separator comment to distinguish context from actual error
         if context:
-            context.append("--- [Context ends, error begins below] ---")
+            context.append("--- [Context: 5 lines before error] ---")
+        
+        return context
+    
+    def _extract_context_after(self, lines: List[str], error_end_index: int) -> List[str]:
+        """
+        Extract context lines after an error for debugging.
+        
+        Captures up to N lines after the error, but stops at:
+        - Next ERROR/CRITICAL line (don't mix errors)
+        - Empty line followed by a gap (log block separator)
+        - End of log
+        
+        Args:
+            lines: All log lines
+            error_end_index: Index of the last line of the error block
+        
+        Returns:
+            List of context lines (may be empty)
+        """
+        context = []
+        end_index = min(len(lines), error_end_index + self.context_lines_after + 1)
+        
+        for idx in range(error_end_index + 1, end_index):
+            if idx >= len(lines):
+                break
+            
+            line = lines[idx]
+            
+            # Stop if we hit another ERROR/CRITICAL (don't mix errors)
+            if re.search(r'\b(ERROR|CRITICAL)\b', line, re.IGNORECASE):
+                # Check if it's a real error line (not just a string containing "error")
+                if re.search(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}.*?(ERROR|CRITICAL)', line, re.IGNORECASE):
+                    break
+            
+            # Stop at empty lines followed by another empty line (log block separator)
+            if not line.strip():
+                if idx + 1 < len(lines) and not lines[idx + 1].strip():
+                    break
+            
+            context.append(line)
+        
+        # Add a separator comment to distinguish context from error
+        if context:
+            context.insert(0, "--- [Context: 5 lines after error] ---")
         
         return context
     
@@ -275,10 +320,10 @@ class ErrorCollector:
             # OR lines with ERROR/CRITICAL that are NOT part of a traceback (standalone errors)
             if 'Traceback (most recent call last)' in line:
                 # Found the start of a traceback - capture context lines before the error
-                context_lines = self._extract_context_lines(lines, i)
+                context_lines_before = self._extract_context_before(lines, i)
                 
                 # Start error block with context, then the traceback line
-                error_block = context_lines + [line]
+                error_block = context_lines_before + [line]
                 
                 # Extract timestamp and base pattern from first line
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
@@ -340,6 +385,10 @@ class ErrorCollector:
                             error_block.append(next_line)
                             j += 1
                 
+                # Add context lines after the error
+                context_lines_after = self._extract_context_after(lines, j - 1)
+                error_block.extend(context_lines_after)
+                
                 error_text = '\n'.join(error_block)
                 
                 if len(error_block) > 0:
@@ -354,9 +403,10 @@ class ErrorCollector:
                         'has_traceback': True
                     })
                     
-                    context_count = len(context_lines)
-                    if context_count > 0:
-                        logger.debug(f"Extracted {len(error_block)}-line traceback block ({context_count} context lines) from {pod_name}")
+                    context_before_count = len(context_lines_before)
+                    context_after_count = len(context_lines_after)
+                    if context_before_count > 0 or context_after_count > 0:
+                        logger.debug(f"Extracted {len(error_block)}-line traceback block ({context_before_count} before, {context_after_count} after) from {pod_name}")
                     else:
                         logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
                 
@@ -381,14 +431,14 @@ class ErrorCollector:
                 
                 # This is a standalone error (not a traceback)
                 # Capture context lines before the error
-                context_lines = self._extract_context_lines(lines, i)
+                context_lines_before = self._extract_context_before(lines, i)
                 
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
                 timestamp = timestamp_match.group(1) if timestamp_match else None
                 severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
                 
                 # Start with context, then the error line
-                error_block = context_lines + [line]
+                error_block = context_lines_before + [line]
                 
                 # Look for continuation lines (same timestamp, no ERROR prefix)
                 j = i + 1
@@ -406,6 +456,10 @@ class ErrorCollector:
                     error_block.append(next_line)
                     j += 1
                 
+                # Add context lines after the error
+                context_lines_after = self._extract_context_after(lines, j - 1)
+                error_block.extend(context_lines_after)
+                
                 error_text = '\n'.join(error_block)
                 
                 if len(error_block) > 0 and len(error_text) > 20:
@@ -420,9 +474,10 @@ class ErrorCollector:
                         'has_traceback': False
                     })
                     
-                    context_count = len(context_lines)
-                    if context_count > 0:
-                        logger.debug(f"Extracted standalone error ({context_count} context lines) from {pod_name}")
+                    context_before_count = len(context_lines_before)
+                    context_after_count = len(context_lines_after)
+                    if context_before_count > 0 or context_after_count > 0:
+                        logger.debug(f"Extracted standalone error ({context_before_count} before, {context_after_count} after) from {pod_name}")
                     else:
                         logger.debug(f"Extracted standalone error from {pod_name}")
                 
