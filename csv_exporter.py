@@ -852,7 +852,7 @@ class CSVExporter:
             csv_file = os.path.join(self.results_dir, f"error_log_{timestamp}.csv")
             
             # Define headers
-            headers = ['severity', 'service', 'pod_name', 'first_seen', 'last_seen', 'count', 'error_text']
+            headers = ['severity', 'service', 'pod_type', 'pod_name', 'first_seen', 'last_seen', 'count', 'error_text']
             
             with open(csv_file, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=headers)
@@ -862,6 +862,7 @@ class CSVExporter:
                     writer.writerow({
                         'severity': error['severity'],
                         'service': error['service'],
+                        'pod_type': error.get('pod_type', 'openstack'),
                         'pod_name': error['pod_name'],
                         'first_seen': error['first_seen'] or 'N/A',
                         'last_seen': error['last_seen'] or 'N/A',
@@ -1183,6 +1184,7 @@ class CSVExporter:
                 </div>
                 <div class="error-meta">
                     <span><strong>Service:</strong> {error['service']}</span>
+                    <span><strong>Pod Type:</strong> {error.get('pod_type', 'openstack').title()}</span>
                     <span><strong>Pod:</strong> {error['pod_name']}</span>
                     <span><strong>Occurrences:</strong> {error['count']}</span>
                     <span><strong>First Seen:</strong> {error.get('first_seen', 'N/A')}</span>

@@ -33,8 +33,8 @@ class ErrorCollector:
         self.namespace = namespace
         
         # Pod patterns to monitor for errors
-        # These are the main OpenStack service pods
-        self.pod_patterns = [
+        # Includes both OpenStack service pods AND Tempest test pods
+        self.openstack_pod_patterns = [
             'octavia-api', 'octavia-worker', 'octavia-housekeeping', 'octavia-health-manager',
             'designate-api', 'designate-central', 'designate-worker', 'designate-producer',
             'designate-mdns', 'designate-sink',
@@ -51,15 +51,20 @@ class ErrorCollector:
             'horizon'
         ]
         
+        # Tempest test pod patterns
+        self.test_pod_patterns = [
+            'tempest-',  # All pods starting with 'tempest-'
+        ]
+        
         # Similarity threshold for fuzzy matching (0-100)
         self.similarity_threshold = 85
     
     def detect_openstack_pods(self) -> List[Dict]:
         """
-        Detect all running OpenStack service pods.
+        Detect all running OpenStack service pods and Tempest test pods.
         
         Returns:
-            List of dictionaries with pod info: {'name': str, 'service': str}
+            List of dictionaries with pod info: {'name': str, 'service': str, 'type': str}
         """
         try:
             cmd = [
@@ -81,20 +86,52 @@ class ErrorCollector:
                 pod_name = pod['metadata']['name']
                 phase = pod['status'].get('phase', '')
                 
-                # Check if pod matches any of our patterns and is running
-                if phase == 'Running':
-                    for pattern in self.pod_patterns:
-                        if pattern in pod_name:
-                            # Extract service name (e.g., 'octavia' from 'octavia-api-xyz')
-                            service = pattern.split('-')[0]
+                # Check if pod is running (or completed/succeeded for test pods)
+                # Test pods may be in 'Succeeded' state but we still want their logs
+                if phase not in ['Running', 'Succeeded', 'Failed']:
+                    continue
+                
+                # Check OpenStack service pods
+                matched = False
+                for pattern in self.openstack_pod_patterns:
+                    if pattern in pod_name:
+                        # Extract service name (e.g., 'octavia' from 'octavia-api-xyz')
+                        service = pattern.split('-')[0]
+                        detected_pods.append({
+                            'name': pod_name,
+                            'service': service,
+                            'type': 'openstack'
+                        })
+                        matched = True
+                        break
+                
+                # Check test pods if not already matched
+                if not matched:
+                    for pattern in self.test_pod_patterns:
+                        if pod_name.startswith(pattern):
+                            # Extract service from test pod name (e.g., 'tempest-octavia' -> 'octavia')
+                            # Test pod format: tempest-<service>-<test-name>-<hash>
+                            parts = pod_name.split('-')
+                            if len(parts) >= 2:
+                                service = parts[1] if len(parts) > 1 else 'tempest'
+                            else:
+                                service = 'tempest'
+                            
                             detected_pods.append({
                                 'name': pod_name,
-                                'service': service
+                                'service': service,
+                                'type': 'test'
                             })
                             break
             
             if detected_pods:
-                logger.info(f"Detected {len(detected_pods)} OpenStack pods for error collection")
+                openstack_count = sum(1 for p in detected_pods if p.get('type') == 'openstack')
+                test_count = sum(1 for p in detected_pods if p.get('type') == 'test')
+                
+                logger.info(f"Detected {len(detected_pods)} pods for error collection:")
+                logger.info(f"  - {openstack_count} OpenStack service pods")
+                logger.info(f"  - {test_count} Tempest test pods")
+                
                 # Log unique services
                 services = sorted(set(p['service'] for p in detected_pods))
                 logger.info(f"Services: {', '.join(services)}")
@@ -102,7 +139,7 @@ class ErrorCollector:
             return detected_pods
             
         except Exception as e:
-            logger.error(f"Error detecting OpenStack pods: {e}")
+            logger.error(f"Error detecting pods: {e}")
             return []
     
     def _normalize_error_text(self, text: str) -> str:
@@ -159,7 +196,7 @@ class ErrorCollector:
         """
         return SequenceMatcher(None, text1, text2).ratio() * 100
     
-    def _extract_error_blocks(self, log_text: str, pod_name: str, service: str) -> List[Dict]:
+    def _extract_error_blocks(self, log_text: str, pod_name: str, service: str, pod_type: str = 'openstack') -> List[Dict]:
         """
         Extract complete error blocks from log text, including full Python tracebacks.
         
@@ -175,6 +212,7 @@ class ErrorCollector:
             log_text: Raw log text
             pod_name: Name of the pod
             service: Service name
+            pod_type: Type of pod ('openstack' or 'test')
         
         Returns:
             List of error dictionaries with complete traceback blocks
@@ -258,6 +296,7 @@ class ErrorCollector:
                     errors.append({
                         'pod_name': pod_name,
                         'service': service,
+                        'pod_type': pod_type,
                         'timestamp': timestamp,
                         'severity': severity,
                         'error_text': error_text,
@@ -315,6 +354,7 @@ class ErrorCollector:
                     errors.append({
                         'pod_name': pod_name,
                         'service': service,
+                        'pod_type': pod_type,
                         'timestamp': timestamp,
                         'severity': severity,
                         'error_text': error_text,
@@ -330,7 +370,7 @@ class ErrorCollector:
         
         return errors
     
-    def parse_pod_logs(self, pod_name: str, service: str, since_time: datetime) -> List[Dict]:
+    def parse_pod_logs(self, pod_name: str, service: str, since_time: datetime, pod_type: str = 'openstack') -> List[Dict]:
         """
         Parse logs from a specific pod and extract error blocks.
         
@@ -338,6 +378,7 @@ class ErrorCollector:
             pod_name: Name of the pod
             service: Service name (e.g., 'octavia', 'designate')
             since_time: Only get logs from this time onwards
+            pod_type: Type of pod ('openstack' or 'test')
         
         Returns:
             List of error dictionaries
@@ -366,11 +407,12 @@ class ErrorCollector:
                 logger.debug(f"No logs found for {pod_name}")
                 return []
             
-            errors = self._extract_error_blocks(log_text, pod_name, service)
+            errors = self._extract_error_blocks(log_text, pod_name, service, pod_type)
             
             if errors:
                 with_traceback = sum(1 for e in errors if e.get('has_traceback'))
-                logger.info(f"Found {len(errors)} error(s) in {pod_name} ({with_traceback} with full tracebacks)")
+                pod_type_label = "test" if pod_type == "test" else "service"
+                logger.info(f"Found {len(errors)} error(s) in {pod_name} ({pod_type_label} pod, {with_traceback} with full tracebacks)")
             
             return errors
             
@@ -429,6 +471,7 @@ class ErrorCollector:
                 unique_errors.append({
                     'pod_name': error['pod_name'],
                     'service': error['service'],
+                    'pod_type': error.get('pod_type', 'openstack'),
                     'severity': error['severity'],
                     'error_text': error['error_text'],
                     'normalized_text': error['normalized_text'],
@@ -486,9 +529,10 @@ class ErrorCollector:
         for pod_info in pods:
             pod_name = pod_info['name']
             service = pod_info['service']
+            pod_type = pod_info.get('type', 'openstack')
             
             logger.info(f"Collecting errors from {pod_name}...")
-            errors = self.parse_pod_logs(pod_name, service, since_time=since_time)
+            errors = self.parse_pod_logs(pod_name, service, since_time=since_time, pod_type=pod_type)
             
             if errors:
                 all_errors.extend(errors)
