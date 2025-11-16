@@ -991,11 +991,47 @@ class CSVExporter:
             margin-top: 30px;
         }}
         
+        .pod-section {{
+            background: #ffffff;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }}
+        
+        .pod-header {{
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }}
+        
+        .pod-header h3 {{
+            color: #667eea;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }}
+        
+        .pod-info {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }}
+        
+        .pod-info span {{
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        
         .error-item {{
             background: #f8f9fa;
             border-left: 5px solid #dc3545;
             padding: 20px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
@@ -1168,29 +1204,62 @@ class CSVExporter:
         </div>
 """
             
+            # Group errors by pod name
+            from collections import defaultdict
+            errors_by_pod = defaultdict(list)
+            for error in unique_errors:
+                errors_by_pod[error['pod_name']].append(error)
+            
+            # Sort pods by total error count (descending)
+            sorted_pods = sorted(errors_by_pod.items(), key=lambda x: sum(e['count'] for e in x[1]), reverse=True)
+            
             # Add error list
             html_content += """
         <div class="error-list">
-            <h2 style="margin-bottom: 20px; color: #333;">Unique Error Blocks</h2>
+            <h2 style="margin-bottom: 20px; color: #333;">Errors Grouped by Pod</h2>
 """
             
-            for idx, error in enumerate(unique_errors, 1):
-                severity_class = error['severity'].lower()
+            for pod_name, pod_errors in sorted_pods:
+                # Get pod info from first error
+                first_error = pod_errors[0]
+                service = first_error['service']
+                pod_type = first_error.get('pod_type', 'openstack').title()
+                total_errors = len(pod_errors)
+                total_occurrences = sum(e['count'] for e in pod_errors)
+                
+                # Add pod section header
                 html_content += f"""
-            <div class="error-item {severity_class}">
-                <div class="error-header">
-                    <span class="severity-badge {severity_class}">{error['severity']}</span>
-                    <strong>Error #{idx}</strong>
+            <div class="pod-section">
+                <div class="pod-header">
+                    <h3>📦 {pod_name}</h3>
+                    <div class="pod-info">
+                        <span><strong>Service:</strong> {service}</span>
+                        <span><strong>Type:</strong> {pod_type}</span>
+                        <span><strong>Unique Errors:</strong> {total_errors}</span>
+                        <span><strong>Total Occurrences:</strong> {total_occurrences}</span>
+                    </div>
                 </div>
-                <div class="error-meta">
-                    <span><strong>Service:</strong> {error['service']}</span>
-                    <span><strong>Pod Type:</strong> {error.get('pod_type', 'openstack').title()}</span>
-                    <span><strong>Pod:</strong> {error['pod_name']}</span>
-                    <span><strong>Occurrences:</strong> {error['count']}</span>
-                    <span><strong>First Seen:</strong> {error.get('first_seen', 'N/A')}</span>
-                    <span><strong>Last Seen:</strong> {error.get('last_seen', 'N/A')}</span>
+"""
+                
+                # Add errors for this pod
+                for idx, error in enumerate(pod_errors, 1):
+                    severity_class = error['severity'].lower()
+                    html_content += f"""
+                <div class="error-item {severity_class}">
+                    <div class="error-header">
+                        <span class="severity-badge {severity_class}">{error['severity']}</span>
+                        <strong>ERROR #{idx}</strong>
+                    </div>
+                    <div class="error-meta">
+                        <span><strong>Occurrences:</strong> {error['count']}</span>
+                        <span><strong>First Seen:</strong> {error.get('first_seen', 'N/A')}</span>
+                        <span><strong>Last Seen:</strong> {error.get('last_seen', 'N/A')}</span>
+                    </div>
+                    <div class="error-text">{self._escape_html(error['error_text'])}</div>
                 </div>
-                <div class="error-text">{self._escape_html(error['error_text'])}</div>
+"""
+                
+                html_content += """
             </div>
 """
             
