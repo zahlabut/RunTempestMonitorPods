@@ -169,6 +169,7 @@ Examples:
     # (CSVExporter.__init__ creates paths with NEW timestamp, but we need OLD files)
     logger.info("\nMapping existing CSV files to CSVExporter...")
     api_csv_file = None
+    error_csv_file = None
     for csv_file in csv_files:
         basename = os.path.basename(csv_file)
         if basename.startswith("old_"):
@@ -189,9 +190,16 @@ Examples:
         elif "api_requests" in basename:
             api_csv_file = csv_file
             logger.info(f"  ✓ API Requests CSV: {basename}")
+        elif "error_log" in basename:
+            error_csv_file = csv_file
+            logger.info(f"  ✓ Error Log CSV: {basename}")
     
     # Generate graphs
     graph_files = []
+    
+    # Note: Error report HTML cannot be regenerated from CSV alone
+    # (it requires the full error text blocks which are too large for CSV parsing)
+    # The error_log CSV will still be included in the web report if it exists
     if not args.no_graphs:
         logger.info("\nGenerating graphs from CSV data...")
         try:

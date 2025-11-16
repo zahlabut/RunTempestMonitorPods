@@ -830,6 +830,397 @@ class CSVExporter:
             logger.error(f"Error exporting API requests: {e}")
             return ""
     
+    def export_error_log(self, error_data: dict) -> str:
+        """
+        Export error log data to CSV.
+        
+        Args:
+            error_data: Dictionary with error analysis results from ErrorCollector
+            
+        Returns:
+            Path to the CSV file
+        """
+        unique_errors = error_data.get('unique_errors', [])
+        
+        if not unique_errors:
+            logger.debug("No errors to export")
+            return ""
+        
+        try:
+            # Generate CSV filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_file = os.path.join(self.results_dir, f"error_log_{timestamp}.csv")
+            
+            # Define headers
+            headers = ['severity', 'service', 'pod_name', 'first_seen', 'last_seen', 'count', 'error_text']
+            
+            with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                
+                for error in unique_errors:
+                    writer.writerow({
+                        'severity': error['severity'],
+                        'service': error['service'],
+                        'pod_name': error['pod_name'],
+                        'first_seen': error['first_seen'] or 'N/A',
+                        'last_seen': error['last_seen'] or 'N/A',
+                        'count': error['count'],
+                        'error_text': error['error_text']
+                    })
+            
+            logger.info(f"Exported {len(unique_errors)} unique errors to {csv_file}")
+            return csv_file
+            
+        except Exception as e:
+            logger.error(f"Error exporting error log: {e}")
+            return ""
+    
+    def generate_error_report(self, error_data: dict) -> str:
+        """
+        Generate an HTML report for collected errors.
+        
+        Args:
+            error_data: Dictionary with error analysis results
+            
+        Returns:
+            Path to the HTML file
+        """
+        unique_errors = error_data.get('unique_errors', [])
+        
+        if not unique_errors:
+            logger.info("No errors to generate report for")
+            return ""
+        
+        try:
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            html_file = os.path.join(self.results_dir, f"error_report_{timestamp}.html")
+            
+            # Statistics
+            total_errors = error_data.get('total_errors', 0)
+            unique_count = error_data.get('unique_count', 0)
+            critical_count = error_data.get('critical_count', 0)
+            by_service = error_data.get('by_service', {})
+            pods_analyzed = error_data.get('pods_analyzed', [])
+            
+            # Generate HTML
+            html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Report - OpenStack Tempest Tests</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }}
+        
+        .header {{
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }}
+        
+        .header h1 {{
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }}
+        
+        .header p {{
+            color: #666;
+            font-size: 1.1em;
+        }}
+        
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }}
+        
+        .stat-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }}
+        
+        .stat-card.critical {{
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+        }}
+        
+        .stat-card.warning {{
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }}
+        
+        .stat-card h3 {{
+            font-size: 2em;
+            margin-bottom: 5px;
+        }}
+        
+        .stat-card p {{
+            font-size: 0.9em;
+            opacity: 0.9;
+        }}
+        
+        .error-list {{
+            margin-top: 30px;
+        }}
+        
+        .error-item {{
+            background: #f8f9fa;
+            border-left: 5px solid #dc3545;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        
+        .error-item.critical {{
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }}
+        
+        .error-item.error {{
+            border-left-color: #ffc107;
+            background: #fffbf0;
+        }}
+        
+        .error-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        
+        .severity-badge {{
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.85em;
+        }}
+        
+        .severity-badge.critical {{
+            background: #dc3545;
+            color: white;
+        }}
+        
+        .severity-badge.error {{
+            background: #ffc107;
+            color: #333;
+        }}
+        
+        .error-meta {{
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }}
+        
+        .error-meta span {{
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        
+        .error-text {{
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85em;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+        
+        .service-summary {{
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }}
+        
+        .service-summary h3 {{
+            color: #1976d2;
+            margin-bottom: 15px;
+        }}
+        
+        .service-list {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        
+        .service-tag {{
+            background: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 2px solid #1976d2;
+            color: #1976d2;
+            font-weight: bold;
+            font-size: 0.9em;
+        }}
+        
+        .back-link {{
+            display: inline-block;
+            margin-top: 30px;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }}
+        
+        .back-link:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }}
+        
+        @media (max-width: 768px) {{
+            .container {{
+                padding: 15px;
+            }}
+            
+            .header h1 {{
+                font-size: 1.8em;
+            }}
+            
+            .stats {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔴 Error Report</h1>
+            <p>OpenStack Pod Errors During Tempest Tests</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3>{total_errors}</h3>
+                <p>Total Errors</p>
+            </div>
+            <div class="stat-card warning">
+                <h3>{unique_count}</h3>
+                <p>Unique Errors</p>
+            </div>
+            <div class="stat-card critical">
+                <h3>{critical_count}</h3>
+                <p>Critical Errors</p>
+            </div>
+            <div class="stat-card">
+                <h3>{len(pods_analyzed)}</h3>
+                <p>Pods Analyzed</p>
+            </div>
+        </div>
+"""
+            
+            # Add service summary if we have by_service data
+            if by_service:
+                html_content += """
+        <div class="service-summary">
+            <h3>Errors by Service</h3>
+            <div class="service-list">
+"""
+                for service, count in sorted(by_service.items(), key=lambda x: x[1], reverse=True):
+                    html_content += f"""
+                <div class="service-tag">{service}: {count}</div>
+"""
+                html_content += """
+            </div>
+        </div>
+"""
+            
+            # Add error list
+            html_content += """
+        <div class="error-list">
+            <h2 style="margin-bottom: 20px; color: #333;">Unique Error Blocks</h2>
+"""
+            
+            for idx, error in enumerate(unique_errors, 1):
+                severity_class = error['severity'].lower()
+                html_content += f"""
+            <div class="error-item {severity_class}">
+                <div class="error-header">
+                    <span class="severity-badge {severity_class}">{error['severity']}</span>
+                    <strong>Error #{idx}</strong>
+                </div>
+                <div class="error-meta">
+                    <span><strong>Service:</strong> {error['service']}</span>
+                    <span><strong>Pod:</strong> {error['pod_name']}</span>
+                    <span><strong>Occurrences:</strong> {error['count']}</span>
+                    <span><strong>First Seen:</strong> {error.get('first_seen', 'N/A')}</span>
+                    <span><strong>Last Seen:</strong> {error.get('last_seen', 'N/A')}</span>
+                </div>
+                <div class="error-text">{self._escape_html(error['error_text'])}</div>
+            </div>
+"""
+            
+            html_content += """
+        </div>
+        
+        <a href="index.html" class="back-link">← Back to Summary</a>
+    </div>
+</body>
+</html>
+"""
+            
+            # Write HTML file
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            logger.info(f"Generated error report: {html_file}")
+            return html_file
+            
+        except Exception as e:
+            logger.error(f"Error generating error report: {e}")
+            return ""
+    
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML special characters."""
+        return (text
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+                .replace("'", '&#39;'))
+    
     def _parse_cpu_value(self, cpu_str: str) -> float:
         """Parse CPU value from string (e.g., '100m' -> 100)."""
         try:
@@ -995,8 +1386,8 @@ class CSVExporter:
             
             for html_file in all_html_in_results:
                 basename = os.path.basename(html_file)
-                # Only include graph files (pod_metrics, test_results, test_execution, api_performance)
-                if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_', 'api_performance_']):
+                # Only include graph files and error reports
+                if any(prefix in basename for prefix in ['pod_metrics_', 'test_results_', 'test_execution_', 'api_performance_', 'error_report_']):
                     if basename not in html_files:  # Avoid duplicates
                         dest = os.path.join(src_dir, basename)
                         shutil.copy2(html_file, dest)
@@ -1311,6 +1702,9 @@ class CSVExporter:
                 elif "api_performance" in html_file:
                     title = "API Performance Analysis"
                     desc = "Response times, status codes, and error rates for API requests"
+                elif "error_report" in html_file:
+                    title = "🔴 Error Report"
+                    desc = "Unique ERROR/CRITICAL blocks from OpenStack pod logs during test execution"
                 else:
                     title = html_file.replace('.html', '').replace('_', ' ').title()
                     desc = "Interactive visualization"
@@ -1351,6 +1745,9 @@ class CSVExporter:
                 elif "api_requests" in csv_file:
                     title = "API Requests Data"
                     desc = "All API requests with timestamps, response codes, and timing"
+                elif "error_log" in csv_file:
+                    title = "Error Log Data"
+                    desc = "Unique ERROR/CRITICAL blocks from OpenStack pods with occurrence counts"
                 else:
                     title = csv_file.replace('.csv', '').replace('_', ' ').title()
                     desc = "Raw data export"

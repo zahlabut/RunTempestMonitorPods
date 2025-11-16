@@ -26,6 +26,7 @@ from pod_monitor import PodMonitor
 from cr_handler import CRHandler
 from csv_exporter import CSVExporter
 from api_monitor import APIMonitor
+from error_collector import ErrorCollector
 
 
 # Global flag for graceful shutdown
@@ -490,6 +491,40 @@ def main():
         else:
             logger.info("\nSkipping API analysis (could not detect service type from CR files)")
         
+        # Collect error logs from OpenStack pods
+        error_data = {}
+        error_report_file = ""
+        error_csv_file = ""
+        logger.info("\nCollecting ERROR/CRITICAL logs from OpenStack pods...")
+        logger.info(f"Filtering logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        try:
+            namespace = config.get('namespace', 'openstack')
+            error_collector = ErrorCollector(namespace=namespace)
+            error_data = error_collector.collect_all_errors(since_time=test_start_time, service_filter=service_filter)
+            
+            if error_data.get('total_errors', 0) > 0:
+                # Export error log to CSV
+                error_csv_file = csv_exporter.export_error_log(error_data)
+                
+                # Generate error report HTML
+                error_report_file = csv_exporter.generate_error_report(error_data)
+                
+                logger.info(f"Error Collection Summary:")
+                logger.info(f"  Total Errors: {error_data['total_errors']}")
+                logger.info(f"  Unique Errors: {error_data['unique_count']}")
+                logger.info(f"  Critical Errors: {error_data['critical_count']}")
+                logger.info(f"  Pods Analyzed: {len(error_data['pods_analyzed'])}")
+                
+                # Show error breakdown by service
+                if error_data.get('by_service'):
+                    logger.info(f"\n  📊 Errors by Service:")
+                    for service, count in sorted(error_data['by_service'].items(), key=lambda x: x[1], reverse=True):
+                        logger.info(f"    {service}: {count}")
+            else:
+                logger.info("✅ No ERROR/CRITICAL logs found in OpenStack pods during test execution")
+        except Exception as e:
+            logger.error(f"Error collecting error logs: {e}")
+        
         # Generate graphs and track for web report
         graph_files = []
         
@@ -501,6 +536,10 @@ def main():
                 # Add API graph if available
                 if api_graph_file:
                     graph_files.append(api_graph_file)
+                
+                # Add error report if available
+                if error_report_file:
+                    graph_files.append(error_report_file)
                 
                 if graph_files:
                     for graph_file in graph_files:
@@ -557,6 +596,9 @@ def main():
             logger.info(f"Test Execution Times CSV: {csv_exporter.test_execution_csv}")
         if api_csv_file and os.path.exists(api_csv_file):
             logger.info(f"API Requests CSV: {api_csv_file}")
+        
+        if error_csv_file and os.path.exists(error_csv_file):
+            logger.info(f"Error Log CSV: {error_csv_file}")
         
         # Show web report location
         if 'web_report_dir' in locals() and web_report_dir:
