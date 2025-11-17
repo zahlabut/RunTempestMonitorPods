@@ -350,11 +350,9 @@ class ErrorCollector:
             # Look for lines that contain "Traceback (most recent call last)" - this is the START of an error block
             # OR lines with ERROR/CRITICAL log level that are NOT part of a traceback (standalone errors)
             if 'Traceback (most recent call last)' in line and self._is_error_or_critical_log_level(line):
-                # Found the start of a traceback - capture context lines before the error
-                context_lines_before = self._extract_context_before(lines, i)
-                
-                # Start error block with context, then the traceback line
-                error_block = context_lines_before + [line]
+                # Found the start of a traceback
+                # Start error block with the traceback line
+                error_block = [line]
                 
                 # Extract timestamp and base pattern from first line
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
@@ -416,10 +414,6 @@ class ErrorCollector:
                             error_block.append(next_line)
                             j += 1
                 
-                # Add context lines after the error
-                context_lines_after = self._extract_context_after(lines, j - 1)
-                error_block.extend(context_lines_after)
-                
                 error_text = '\n'.join(error_block)
                 
                 if len(error_block) > 0:
@@ -434,12 +428,7 @@ class ErrorCollector:
                         'has_traceback': True
                     })
                     
-                    context_before_count = len(context_lines_before)
-                    context_after_count = len(context_lines_after)
-                    if context_before_count > 0 or context_after_count > 0:
-                        logger.debug(f"Extracted {len(error_block)}-line traceback block ({context_before_count} before, {context_after_count} after) from {pod_name}")
-                    else:
-                        logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
+                    logger.debug(f"Extracted {len(error_block)}-line traceback block from {pod_name}")
                 
                 # Skip all processed lines
                 i = j
@@ -461,15 +450,12 @@ class ErrorCollector:
                         continue
                 
                 # This is a standalone error (not a traceback)
-                # Capture context lines before the error
-                context_lines_before = self._extract_context_before(lines, i)
-                
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
                 timestamp = timestamp_match.group(1) if timestamp_match else None
                 severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
                 
-                # Start with context, then the error line
-                error_block = context_lines_before + [line]
+                # Start with the error line
+                error_block = [line]
                 
                 # Look for continuation lines (same timestamp, no ERROR prefix)
                 j = i + 1
@@ -486,10 +472,6 @@ class ErrorCollector:
                     
                     error_block.append(next_line)
                     j += 1
-                
-                # Add context lines after the error
-                context_lines_after = self._extract_context_after(lines, j - 1)
-                error_block.extend(context_lines_after)
                 
                 error_text = '\n'.join(error_block)
                 
