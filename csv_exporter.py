@@ -1187,6 +1187,9 @@ class CSVExporter:
         <div class="header">
             <h1>🔴 Error Report</h1>
             <p>OpenStack Pod Errors During Tempest Tests</p>
+            <p style="margin-top: 15px; color: #f57c00; font-weight: bold; background: #fff3e0; padding: 10px; border-radius: 5px; border-left: 4px solid #f57c00;">
+                ⚡ Performance Mode: Analyzing LAST ITERATION ONLY (not entire test run)
+            </p>
         </div>
         
         <div class="stats">

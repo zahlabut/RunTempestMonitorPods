@@ -232,7 +232,7 @@ def monitor_pods_loop(pod_monitor: PodMonitor, csv_exporter: CSVExporter, interv
 
 
 def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: CSVExporter, 
-                      end_time: datetime, max_parallel: int = 2) -> List[Dict]:
+                      end_time: datetime, max_parallel: int = 2) -> Tuple[List[Dict], datetime]:
     """
     Run CR tests in a loop until end_time.
     
@@ -244,16 +244,23 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
         max_parallel: Maximum parallel CR executions
         
     Returns:
-        List of all test results
+        Tuple of (all_test_results, last_iteration_start_time)
+        - all_test_results: List of all test results from all iterations
+        - last_iteration_start_time: Start time of the last iteration (used for error log collection)
     """
     logger = logging.getLogger(__name__)
     all_results = []
     iteration = 1
+    last_iteration_start_time = test_start_time  # Track start time of last iteration for error collection
     
     logger.info(f"Starting test loop with {len(cr_files)} CR files")
     logger.info(f"Will run until: {end_time}")
     
     while datetime.now() < end_time and not shutdown_flag.is_set():
+        # Track the start time of this iteration
+        iteration_start_time = datetime.now()
+        last_iteration_start_time = iteration_start_time
+        
         logger.info(f"\n{'='*60}")
         logger.info(f"Starting iteration {iteration}")
         logger.info(f"{'='*60}\n")
@@ -327,7 +334,8 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
             break
     
     logger.info(f"\nCompleted {iteration - 1} iterations")
-    return all_results
+    logger.info(f"Last iteration started at: {last_iteration_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    return all_results, last_iteration_start_time
 
 
 def main():
@@ -395,7 +403,7 @@ def main():
     
     # Run tests in loop
     try:
-        all_results = run_tests_in_loop(
+        all_results, last_iteration_start_time = run_tests_in_loop(
             cr_files=config['cr_files'],
             cr_handler=cr_handler,
             csv_exporter=csv_exporter,
@@ -496,11 +504,13 @@ def main():
         error_report_file = ""
         error_csv_file = ""
         logger.info("\nCollecting ERROR/CRITICAL logs from OpenStack pods...")
-        logger.info(f"Filtering logs from test start time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("⚡ Performance optimization: Analyzing LAST ITERATION ONLY (not entire test run)")
+        logger.info(f"Filtering logs from last iteration start: {last_iteration_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"(Skipping earlier logs from: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')} - {last_iteration_start_time.strftime('%Y-%m-%d %H:%M:%S')})")
         try:
             namespace = config.get('namespace', 'openstack')
             error_collector = ErrorCollector(namespace=namespace)
-            error_data = error_collector.collect_all_errors(since_time=test_start_time, service_filter=service_filter)
+            error_data = error_collector.collect_all_errors(since_time=last_iteration_start_time, service_filter=service_filter)
             
             if error_data.get('total_errors', 0) > 0:
                 # Export error log to CSV
