@@ -177,6 +177,40 @@ class ErrorCollector:
         pattern = r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d+\s+\d+\s+(ERROR|CRITICAL)\s+'
         return re.search(pattern, line, re.IGNORECASE) is not None
     
+    def _has_error_keywords_in_prefix(self, line: str) -> bool:
+        """
+        Check if error-related keywords appear in the first 50 characters of a line.
+        
+        This is a FLEXIBLE detection method for logs that don't follow standard format.
+        Useful for:
+        - Test pod output (non-standard format)
+        - Different log formats from various services
+        - Tracebacks without standard timestamp prefix
+        
+        Keywords checked: ERROR, CRITICAL, FAILED, TRACEBACK, EXCEPTION
+        
+        Args:
+            line: Log line to check
+            
+        Returns:
+            True if error keywords found in first 50 chars, False otherwise
+            
+        Examples:
+            ✅ "{1} test.name [0.736s] ... FAILED" → True
+            ✅ "Traceback (most recent call last):" → True
+            ✅ "ERROR: Connection refused" → True
+            ✅ "CRITICAL: Database unavailable" → True
+            ✅ "Exception occurred while processing" → True
+            ❌ "This is a normal log line mentioning error later in the message..." → False
+        """
+        # Check first 50 characters only
+        prefix = line[:50].upper()
+        
+        # List of error keywords to detect
+        error_keywords = ['ERROR', 'CRITICAL', 'FAILED', 'TRACEBACK', 'EXCEPTION']
+        
+        return any(keyword in prefix for keyword in error_keywords)
+    
     def _normalize_error_text(self, text: str) -> str:
         """
         Normalize error text for fuzzy matching by removing dynamic content.
@@ -349,7 +383,11 @@ class ErrorCollector:
             
             # Look for lines that contain "Traceback (most recent call last)" - this is the START of an error block
             # OR lines with ERROR/CRITICAL log level that are NOT part of a traceback (standalone errors)
-            if 'Traceback (most recent call last)' in line and self._is_error_or_critical_log_level(line):
+            # Use BOTH strict (structured log) AND flexible (keyword in prefix) detection
+            if 'Traceback (most recent call last)' in line and (
+                self._is_error_or_critical_log_level(line) or 
+                self._has_error_keywords_in_prefix(line)
+            ):
                 # Found the start of a traceback
                 # Start error block with the traceback line
                 error_block = [line]
@@ -433,26 +471,31 @@ class ErrorCollector:
                 # Skip all processed lines
                 i = j
                 
-            elif self._is_error_or_critical_log_level(line):
-                # This is an ERROR/CRITICAL line (by log level, not just message content) but NOT part of a traceback
-                # Only capture if it's NOT a traceback fragment (no "File", no indentation at start of content)
+            elif self._is_error_or_critical_log_level(line) or self._has_error_keywords_in_prefix(line):
+                # This is an ERROR/CRITICAL line detected by:
+                #   1. Strict method: actual ERROR/CRITICAL log level in structured log
+                #   2. Flexible method: error keywords in first 50 chars
+                # Only capture if it's NOT part of a traceback (no "Traceback", no "File")
                 
-                # Extract the actual content after the log prefix
-                content_match = re.search(r'(ERROR|CRITICAL)\s+[\w\.]+\s+(.*)', line, re.IGNORECASE)
-                if content_match:
-                    content = content_match.group(2).strip()
-                    
-                    # Skip if this looks like a traceback fragment
-                    if (content.startswith('File "') or 
-                        content.startswith('Traceback') or
-                        re.match(r'^\s+(File|return|raise|def|class)', content)):
-                        i += 1
-                        continue
+                # Skip if this looks like a traceback fragment
+                if ('File "' in line[:100] or 
+                    'Traceback' in line[:100] or
+                    re.match(r'^\s+(File|return|raise|def|class)', line.strip())):
+                    i += 1
+                    continue
                 
                 # This is a standalone error (not a traceback)
                 timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})', line)
                 timestamp = timestamp_match.group(1) if timestamp_match else None
-                severity = 'CRITICAL' if 'CRITICAL' in line.upper() else 'ERROR'
+                
+                # Determine severity from keywords in line
+                line_upper = line.upper()
+                if 'CRITICAL' in line_upper:
+                    severity = 'CRITICAL'
+                elif 'FAILED' in line_upper or 'EXCEPTION' in line_upper:
+                    severity = 'ERROR'  # Treat FAILED/EXCEPTION as ERROR
+                else:
+                    severity = 'ERROR'
                 
                 # Start with the error line
                 error_block = [line]
