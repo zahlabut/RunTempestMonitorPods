@@ -416,6 +416,12 @@ This CSV enables API performance analysis:
 
 The tool generates interactive HTML graphs and static images for visualization.
 
+**Web Report Interface:**
+
+![Web Report - index.html](docs/GraphExample.png)
+
+*The web report provides a beautiful summary dashboard with test statistics, interactive graphs, and downloadable CSV files*
+
 #### Pod Metrics Graph
 
 Interactive HTML graph showing:
@@ -429,10 +435,6 @@ The graph displays multiple pods on a single interactive chart with:
 - Zoom and pan capabilities for detailed analysis
 - Legend to show/hide specific pods
 - Time-series data captured at configured intervals
-
-**Example Graph:**
-
-![Pod Metrics Example](docs/GraphExample.png)
 
 **What to look for in the graph:**
 - 📈 **Steady CPU/Memory**: Normal test execution
