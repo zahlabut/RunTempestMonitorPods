@@ -186,8 +186,19 @@ class ErrorCollector:
         - Test pod output (non-standard format)
         - Different log formats from various services
         - Tracebacks without standard timestamp prefix
+        - Connectivity/network issues
+        - System crashes and resource exhaustion
+        - Python/Java exception messages
         
-        Keywords checked: ERROR, CRITICAL, FAILED, TRACEBACK, EXCEPTION
+        Keywords checked (50+ keywords across categories):
+        - Error levels: ERROR, CRITICAL, FATAL, PANIC, FAIL, FAILED
+        - Exceptions: EXCEPTION, TRACEBACK, RAISE, THROWN, *Error (Python/Java)
+        - Connectivity: TIMEOUT, REFUSED, UNREACHABLE, DISCONNECT, CONNECTION
+        - System: CRASH, HUNG, DEADLOCK, SEGFAULT, OOM, OUT OF MEMORY
+        - Access: DENIED, FORBIDDEN, UNAUTHORIZED, PERMISSION
+        - HTTP: HTTP 4XX/5XX, STATUS 4XX/5XX, 500, 502, 503, 504
+        - Database: ROLLBACK, CONSTRAINT, INTEGRITY
+        - Validation: INVALID, MALFORMED, UNEXPECTED
         
         Args:
             line: Log line to check
@@ -201,13 +212,56 @@ class ErrorCollector:
             ✅ "ERROR: Connection refused" → True
             ✅ "CRITICAL: Database unavailable" → True
             ✅ "Exception occurred while processing" → True
+            ✅ "Connection timeout after 30 seconds" → True
+            ✅ "KeyError: 'missing_key' not found" → True
+            ✅ "NullPointerException at line 42" → True
+            ✅ "Service unavailable (503)" → True
             ❌ "This is a normal log line mentioning error later in the message..." → False
         """
         # Check first 50 characters only
         prefix = line[:50].upper()
         
-        # List of error keywords to detect
-        error_keywords = ['ERROR', 'CRITICAL', 'FAILED', 'TRACEBACK', 'EXCEPTION']
+        # Comprehensive list of error keywords to detect potential problems
+        error_keywords = [
+            # Basic error levels
+            'ERROR', 'CRITICAL', 'FATAL', 'PANIC', 'FAIL', 'FAILED',
+            
+            # Exception indicators
+            'EXCEPTION', 'TRACEBACK', 'RAISE', 'THROWN',
+            
+            # Connectivity/Network issues
+            'TIMEOUT', 'TIMED OUT', 'REFUSED', 'UNREACHABLE', 'DISCONNECT',
+            'CONNECTION', 'CLOSED', 'BROKEN PIPE', 'RESET', 'ABORT',
+            
+            # Python exceptions (common ones)
+            'KEYERROR', 'VALUEERROR', 'ATTRIBUTEERROR', 'TYPEERROR',
+            'INDEXERROR', 'IMPORTERROR', 'RUNTIMEERROR', 'MEMORYERROR',
+            'OSERROR', 'IOERROR', 'ASSERTIONERROR',
+            
+            # Java exceptions (common ones)
+            'NULLPOINTEREXCEPTION', 'OUTOFMEMORYERROR', 'STACKOVERFLOWERROR',
+            'ILLEGALARGUMENTEXCEPTION', 'CLASSNOTFOUNDEXCEPTION',
+            
+            # System/Resource issues
+            'CRASH', 'HUNG', 'DEADLOCK', 'CORRUPT', 'SEGFAULT',
+            'CORE DUMP', 'OOM', 'OUT OF MEMORY',
+            
+            # Access/Permission issues
+            'DENIED', 'FORBIDDEN', 'UNAUTHORIZED', 'PERMISSION',
+            
+            # Availability issues
+            'UNAVAILABLE', 'DOWN', 'OFFLINE', 'UNREACHABLE',
+            
+            # Database issues
+            'ROLLBACK', 'CONSTRAINT', 'INTEGRITY',
+            
+            # Validation issues
+            'INVALID', 'MALFORMED', 'UNEXPECTED',
+            
+            # HTTP error codes (in text form for logs)
+            'HTTP 4', 'HTTP 5', 'STATUS 4', 'STATUS 5',
+            '500 ', '502 ', '503 ', '504 ',
+        ]
         
         return any(keyword in prefix for keyword in error_keywords)
     
