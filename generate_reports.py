@@ -197,16 +197,73 @@ Examples:
     # Generate graphs
     graph_files = []
     
-    # Note: Error report HTML cannot be regenerated from CSV alone
-    # (it requires the full error text blocks which are too large for CSV parsing)
-    # The error_log CSV will still be included in the web report if it exists
+    # Generate error report from error_log CSV if it exists
+    if error_csv_file and os.path.exists(error_csv_file):
+        logger.info("\nGenerating error report from CSV...")
+        try:
+            # Read error CSV
+            error_df = pd.read_csv(error_csv_file)
+            if not error_df.empty:
+                # Convert CSV back to error_data format
+                unique_errors = []
+                by_service = {}
+                critical_count = 0
+                pods_analyzed = set()
+                
+                for _, row in error_df.iterrows():
+                    error = {
+                        'severity': row['severity'],
+                        'service': row['service'],
+                        'pod_type': row['pod_type'],
+                        'pod_name': row['pod_name'],
+                        'first_seen': row['first_seen'],
+                        'last_seen': row['last_seen'],
+                        'count': int(row['count']),
+                        'error_text': row['error_text'],
+                        'occurrences': []  # Not needed for report generation
+                    }
+                    unique_errors.append(error)
+                    
+                    # Count by service
+                    service = row['service']
+                    by_service[service] = by_service.get(service, 0) + int(row['count'])
+                    
+                    # Count critical
+                    if row['severity'] == 'CRITICAL':
+                        critical_count += int(row['count'])
+                    
+                    # Track pods
+                    pods_analyzed.add(row['pod_name'])
+                
+                # Build error_data structure
+                error_data = {
+                    'unique_errors': unique_errors,
+                    'total_errors': error_df['count'].sum(),
+                    'unique_count': len(unique_errors),
+                    'critical_count': critical_count,
+                    'by_service': by_service,
+                    'pods_analyzed': list(pods_analyzed)
+                }
+                
+                # Generate error report HTML
+                error_report_html = csv_exporter.generate_error_report(error_data)
+                if error_report_html:
+                    graph_files.append(error_report_html)
+                    logger.info(f"  ✓ Error report: {os.path.basename(error_report_html)}")
+            else:
+                logger.warning("  Error CSV is empty, skipping error report")
+        except Exception as e:
+            logger.error(f"Error generating error report: {e}")
+            logger.warning("Continuing without error report...")
+    
     if not args.no_graphs:
         logger.info("\nGenerating graphs from CSV data...")
         try:
-            graph_files = csv_exporter.generate_graphs()
-            if graph_files:
-                logger.info(f"Successfully generated {len(graph_files)} graph(s):")
-                for graph_file in graph_files:
+            generated_graphs = csv_exporter.generate_graphs()
+            if generated_graphs:
+                graph_files.extend(generated_graphs)
+                logger.info(f"Successfully generated {len(generated_graphs)} graph(s):")
+                for graph_file in generated_graphs:
                     logger.info(f"  ✓ {os.path.basename(graph_file)}")
             else:
                 logger.warning("No graphs were generated (possibly insufficient data)")
