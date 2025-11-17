@@ -555,9 +555,16 @@ class ErrorCollector:
         if not all_errors:
             return []
         
-        unique_errors = []
+        logger.info(f"Deduplicating {len(all_errors)} errors using fuzzy matching (threshold: {self.similarity_threshold}%)...")
+        start_time = datetime.now()
         
-        for error in all_errors:
+        unique_errors = []
+        total = len(all_errors)
+        
+        for idx, error in enumerate(all_errors, 1):
+            # Log progress every 100 errors
+            if idx % 100 == 0 or idx == total:
+                logger.info(f"  Progress: {idx}/{total} errors processed ({len(unique_errors)} unique so far)...")
             # Check if this error is similar to any existing unique error
             found_match = False
             
@@ -606,6 +613,11 @@ class ErrorCollector:
             0 if x['severity'] == 'CRITICAL' else 1,
             -x['count']
         ))
+        
+        # Log completion time
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        logger.info(f"Deduplication complete: {len(all_errors)} errors → {len(unique_errors)} unique (took {duration:.1f}s)")
         
         return unique_errors
     
