@@ -155,6 +155,34 @@ Examples:
     for csv_file in sorted(csv_files):
         logger.info(f"  - {os.path.basename(csv_file)}")
     
+    # Clean up old HTML graph files and ZIP archives from interrupted run (to avoid duplicates)
+    import shutil
+    old_html_files = glob.glob(os.path.join(results_dir, "*.html"))
+    old_zip_files = glob.glob(os.path.join(results_dir, "results_archive_*.zip"))
+    old_web_report = os.path.join(results_dir, "web_report")
+    old_files = old_html_files + old_zip_files
+    
+    if old_files or os.path.exists(old_web_report):
+        logger.info(f"\nCleaning up old files from interrupted run...")
+        
+        # Remove old HTML and ZIP files
+        for old_file in old_files:
+            try:
+                os.remove(old_file)
+                logger.debug(f"  Removed: {os.path.basename(old_file)}")
+            except Exception as e:
+                logger.warning(f"  Could not remove {os.path.basename(old_file)}: {e}")
+        
+        # Remove old web_report directory
+        if os.path.exists(old_web_report):
+            try:
+                shutil.rmtree(old_web_report)
+                logger.debug(f"  Removed: web_report/")
+            except Exception as e:
+                logger.warning(f"  Could not remove web_report/: {e}")
+        
+        logger.info(f"  ✓ Cleaned up {len(old_html_files)} HTML files, {len(old_zip_files)} ZIP archives, and web_report directory")
+    
     # Initialize CSV exporter (point to existing directory, skip archiving!)
     logger.info("\nInitializing CSV exporter...")
     csv_exporter = CSVExporter(
