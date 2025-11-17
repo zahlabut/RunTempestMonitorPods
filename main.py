@@ -251,7 +251,7 @@ def run_tests_in_loop(cr_files: List[str], cr_handler: CRHandler, csv_exporter: 
     logger = logging.getLogger(__name__)
     all_results = []
     iteration = 1
-    last_iteration_start_time = test_start_time  # Track start time of last iteration for error collection
+    last_iteration_start_time = datetime.now()  # Track start time of last iteration for error collection
     
     logger.info(f"Starting test loop with {len(cr_files)} CR files")
     logger.info(f"Will run until: {end_time}")
@@ -402,6 +402,7 @@ def main():
     monitor_thread.start()
     
     # Run tests in loop
+    last_iteration_start_time = test_start_time  # Default to test start time
     try:
         all_results, last_iteration_start_time = run_tests_in_loop(
             cr_files=config['cr_files'],
