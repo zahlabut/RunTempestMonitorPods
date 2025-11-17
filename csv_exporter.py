@@ -1320,7 +1320,8 @@ class CSVExporter:
         """
         Highlight critical keywords in error text with red background.
         
-        Keywords: error, traceback, critical, failed, exception, timeout, refused, denied, etc.
+        Matches the comprehensive 50+ keyword list from error_collector.py for consistent
+        visual highlighting across detection and reporting.
         
         Args:
             text: HTML-escaped text
@@ -1328,12 +1329,47 @@ class CSVExporter:
         Returns:
             Text with keywords wrapped in <span class="keyword-highlight">
         """
+        # Comprehensive list matching error_collector.py detection keywords
         keywords = [
-            'error', 'critical', 'failed', 'failure', 'exception',
-            'traceback', 'timeout', 'timed out', 'refused', 'denied',
-            'invalid', 'not found', 'cannot', 'unable', 'forbidden',
-            'unauthorized', 'fatal', 'abort', 'aborted', 'panic',
-            'killed', 'segfault', 'crash', 'broken', 'corrupt'
+            # Basic error levels
+            'error', 'critical', 'fatal', 'panic', 'fail', 'failed', 'failure',
+            
+            # Exception indicators
+            'exception', 'traceback', 'raise', 'raised', 'thrown',
+            
+            # Connectivity/Network issues
+            'timeout', 'timed out', 'refused', 'unreachable', 'disconnect',
+            'disconnected', 'connection', 'closed', 'broken pipe', 'reset', 'abort', 'aborted',
+            
+            # Python exceptions (case-insensitive matching will catch *Error patterns)
+            'keyerror', 'valueerror', 'attributeerror', 'typeerror',
+            'indexerror', 'importerror', 'runtimeerror', 'memoryerror',
+            'oserror', 'ioerror', 'assertionerror', 'assertionfailure',
+            
+            # Java exceptions
+            'nullpointerexception', 'outofmemoryerror', 'stackoverflowerror',
+            'illegalargumentexception', 'classnotfoundexception',
+            
+            # System/Resource issues
+            'crash', 'crashed', 'hung', 'deadlock', 'corrupt', 'corrupted',
+            'segfault', 'core dump', 'oom', 'out of memory', 'killed',
+            
+            # Access/Permission issues
+            'denied', 'forbidden', 'unauthorized', 'permission',
+            
+            # Availability issues
+            'unavailable', 'down', 'offline',
+            
+            # Database issues
+            'rollback', 'constraint', 'integrity',
+            
+            # Validation issues
+            'invalid', 'malformed', 'unexpected', 'not found', 'cannot', 'unable',
+            
+            # HTTP error indicators
+            'http 4', 'http 5', 'status 4', 'status 5',
+            '500', '502', '503', '504', 'internal server error',
+            'bad gateway', 'service unavailable', 'gateway timeout',
         ]
         
         import re
