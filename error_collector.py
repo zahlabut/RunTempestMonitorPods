@@ -306,6 +306,34 @@ class ErrorCollector:
         
         return text.strip()
     
+    def _strip_ansi_codes(self, text: str) -> str:
+        """
+        Remove ANSI escape sequences (color codes) from text.
+        
+        ANSI codes like \x1b[32m (green), \x1b[0m (reset), or [00m interfere with:
+        - Character position counting (for first 50 chars check)
+        - Regex pattern matching (for log level detection)
+        
+        Args:
+            text: Text that may contain ANSI codes
+            
+        Returns:
+            Text with ANSI codes removed
+            
+        Examples:
+            Input:  "\x1b[32mDEBUG\x1b[0m message"
+            Output: "DEBUG message"
+            
+            Input:  "message[00m"
+            Output: "message"
+        """
+        # Pattern matches ANSI escape sequences:
+        # \x1b[...m  or  \033[...m  (ESC[...m format)
+        # \x1b[...  (incomplete sequences)
+        # Also match standalone [XXm patterns (common in some log outputs)
+        ansi_escape = re.compile(r'(\x1b|\033)\[[0-9;]*[a-zA-Z]?|\[[0-9]{1,2}m')
+        return ansi_escape.sub('', text)
+    
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
         Calculate similarity between two error texts using SequenceMatcher.
@@ -628,6 +656,10 @@ class ErrorCollector:
             if not log_text.strip():
                 logger.debug(f"No logs found for {pod_name}")
                 return []
+            
+            # Strip ANSI color codes from logs before processing
+            # ANSI codes like \x1b[32m (green) or [00m (reset) interfere with detection
+            log_text = self._strip_ansi_codes(log_text)
             
             errors = self._extract_error_blocks(log_text, pod_name, service, pod_type)
             
