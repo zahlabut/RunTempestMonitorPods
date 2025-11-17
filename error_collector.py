@@ -584,12 +584,7 @@ class ErrorCollector:
                         'has_traceback': False
                     })
                     
-                    context_before_count = len(context_lines_before)
-                    context_after_count = len(context_lines_after)
-                    if context_before_count > 0 or context_after_count > 0:
-                        logger.debug(f"Extracted standalone error ({context_before_count} before, {context_after_count} after) from {pod_name}")
-                    else:
-                        logger.debug(f"Extracted standalone error from {pod_name}")
+                    logger.debug(f"Extracted standalone error from {pod_name}")
                 
                 i = j
             else:
