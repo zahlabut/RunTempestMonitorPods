@@ -146,6 +146,37 @@ class ErrorCollector:
             logger.error(f"Error detecting pods: {e}")
             return []
     
+    def _is_error_or_critical_log_level(self, line: str) -> bool:
+        """
+        Check if a log line has ERROR or CRITICAL as the actual log level.
+        Does NOT match if ERROR/CRITICAL appears in the message content.
+        
+        OpenStack log format:
+        2025-11-17 11:19:19.758 15 DEBUG designate.central.service [...] message
+                                   ^^^^^
+                                   This is the log level field!
+        
+        Common formats:
+        - "YYYY-MM-DD HH:MM:SS.mmm PID LEVEL module [context] message"
+        - "YYYY-MM-DDTHH:MM:SS.mmm PID LEVEL module [context] message"
+        
+        Args:
+            line: Log line to check
+            
+        Returns:
+            True if the log level field is ERROR or CRITICAL, False otherwise
+            
+        Examples:
+            ✅ "2025-11-17 11:19:19.758 15 ERROR designate.api ..." → True
+            ✅ "2025-11-17 11:19:19.758 15 CRITICAL nova.compute ..." → True
+            ❌ "2025-11-17 11:19:19.758 15 DEBUG designate.api [...] status ERROR" → False
+            ❌ "2025-11-17 11:19:19.758 15 INFO neutron.agent [...] ERROR in data" → False
+        """
+        # Match OpenStack log format: timestamp + PID + log_level + module
+        # Look for ERROR or CRITICAL in the log level field (after timestamp/PID, before module name)
+        pattern = r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d+\s+\d+\s+(ERROR|CRITICAL)\s+'
+        return re.search(pattern, line, re.IGNORECASE) is not None
+    
     def _normalize_error_text(self, text: str) -> str:
         """
         Normalize error text for fuzzy matching by removing dynamic content.
@@ -317,8 +348,8 @@ class ErrorCollector:
             line = lines[i]
             
             # Look for lines that contain "Traceback (most recent call last)" - this is the START of an error block
-            # OR lines with ERROR/CRITICAL that are NOT part of a traceback (standalone errors)
-            if 'Traceback (most recent call last)' in line:
+            # OR lines with ERROR/CRITICAL log level that are NOT part of a traceback (standalone errors)
+            if 'Traceback (most recent call last)' in line and self._is_error_or_critical_log_level(line):
                 # Found the start of a traceback - capture context lines before the error
                 context_lines_before = self._extract_context_before(lines, i)
                 
@@ -413,8 +444,8 @@ class ErrorCollector:
                 # Skip all processed lines
                 i = j
                 
-            elif re.search(r'\b(ERROR|CRITICAL)\b', line, re.IGNORECASE):
-                # This is an ERROR/CRITICAL line but NOT part of a traceback
+            elif self._is_error_or_critical_log_level(line):
+                # This is an ERROR/CRITICAL line (by log level, not just message content) but NOT part of a traceback
                 # Only capture if it's NOT a traceback fragment (no "File", no indentation at start of content)
                 
                 # Extract the actual content after the log prefix
