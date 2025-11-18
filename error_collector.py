@@ -177,6 +177,32 @@ class ErrorCollector:
         pattern = r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d+\s+\d+\s+(ERROR|CRITICAL)\s+'
         return re.search(pattern, line, re.IGNORECASE) is not None
     
+    def _is_debug_info_warning_level(self, line: str) -> bool:
+        """
+        Check if a log line has DEBUG, INFO, or WARNING as the log level.
+        
+        Used to EXCLUDE these levels from flexible keyword detection, since:
+        - DEBUG: Development/diagnostic messages (not errors)
+        - INFO: Informational messages (not errors)  
+        - WARNING: Potential issues (not confirmed errors)
+        
+        Args:
+            line: Log line to check
+            
+        Returns:
+            True if the log level field is DEBUG, INFO, or WARNING, False otherwise
+            
+        Examples:
+            ✅ "2025-11-17 15:51:39.504 16 INFO designate.mdns ..." → True
+            ✅ "2025-11-17 15:47:52.504 17 WARNING designate.mdns ..." → True
+            ✅ "2025-11-17 16:00:34.502 16 DEBUG designate.service ..." → True
+            ❌ "2025-11-17 11:19:19.758 15 ERROR designate.api ..." → False
+        """
+        # Match OpenStack log format: timestamp + PID + log_level + module
+        # Look for DEBUG, INFO, or WARNING in the log level field
+        pattern = r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d+\s+\d+\s+(DEBUG|INFO|WARNING)\s+'
+        return re.search(pattern, line, re.IGNORECASE) is not None
+    
     def _has_error_keywords_in_prefix(self, line: str) -> bool:
         """
         Check if error-related keywords appear in the first 50 characters of a line.
@@ -468,7 +494,7 @@ class ErrorCollector:
             # Use BOTH strict (structured log) AND flexible (keyword in prefix) detection
             if 'Traceback (most recent call last)' in line and (
                 self._is_error_or_critical_log_level(line) or 
-                self._has_error_keywords_in_prefix(line)
+                (self._has_error_keywords_in_prefix(line) and not self._is_debug_info_warning_level(line))
             ):
                 # Found the start of a traceback
                 # Start error block with the traceback line
@@ -553,10 +579,13 @@ class ErrorCollector:
                 # Skip all processed lines
                 i = j
                 
-            elif self._is_error_or_critical_log_level(line) or self._has_error_keywords_in_prefix(line):
+            elif self._is_error_or_critical_log_level(line) or (
+                self._has_error_keywords_in_prefix(line) and 
+                not self._is_debug_info_warning_level(line)
+            ):
                 # This is an ERROR/CRITICAL line detected by:
                 #   1. Strict method: actual ERROR/CRITICAL log level in structured log
-                #   2. Flexible method: error keywords in first 50 chars
+                #   2. Flexible method: error keywords in first 50 chars AND not DEBUG/INFO/WARNING
                 # Only capture if it's NOT part of a traceback (no "Traceback", no "File")
                 
                 # Skip if this looks like a traceback fragment
