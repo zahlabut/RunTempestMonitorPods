@@ -6,6 +6,7 @@ metadata:
  namespace: openstack
 spec:
  containerImage: quay.io/podified-antelope-centos9/openstack-tempest-all:current-podified
+ storageClass: lvms-local-storage
  tempestRun:
    includeList: |
      octavia_tempest_plugin.*
