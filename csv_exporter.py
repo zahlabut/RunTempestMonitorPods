@@ -1184,6 +1184,8 @@ class CSVExporter:
 </head>
 <body>
     <div class="container">
+        <a href="../index.html" class="back-link" style="display: inline-block; margin-bottom: 20px;">← Back to Summary</a>
+        
         <div class="header">
             <h1>🔴 Error Report</h1>
             <p>OpenStack Pod Errors During Tempest Tests</p>
@@ -1289,8 +1291,6 @@ class CSVExporter:
             
             html_content += """
         </div>
-        
-        <a href="../index.html" class="back-link">← Back to Summary</a>
     </div>
 </body>
 </html>
@@ -1450,6 +1450,8 @@ class CSVExporter:
 </head>
 <body>
     <div class="container">
+        <a href="../index.html" class="back-link" style="display: inline-block; margin-bottom: 20px;">← Back to Summary</a>
+        
         <div class="header">
             <h1>{title}</h1>
         </div>
@@ -1457,8 +1459,6 @@ class CSVExporter:
         <div class="graph-container">
             {plotly_html}
         </div>
-        
-        <a href="../index.html" class="back-link">← Back to Summary</a>
     </div>
 </body>
 </html>
