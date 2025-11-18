@@ -1934,7 +1934,26 @@ class CSVExporter:
             <h2>📈 Interactive Graphs</h2>
             <div class="grid">
 """
+            # Deduplicate by graph type (keep only the most recent of each type)
+            unique_graphs = {}
             for html_file in sorted(html_files):
+                if "pod_metrics" in html_file:
+                    graph_type = "pod_metrics"
+                elif "test_results" in html_file:
+                    graph_type = "test_results"
+                elif "test_execution" in html_file:
+                    graph_type = "test_execution"
+                elif "api_performance" in html_file:
+                    graph_type = "api_performance"
+                elif "error_report" in html_file:
+                    graph_type = "error_report"
+                else:
+                    graph_type = html_file
+                
+                # Keep the latest file (sorted alphabetically, so latest timestamp wins)
+                unique_graphs[graph_type] = html_file
+            
+            for html_file in sorted(unique_graphs.values()):
                 # Create friendly names
                 if "pod_metrics" in html_file:
                     title = "Pod Metrics (CPU, Memory, Restarts)"
